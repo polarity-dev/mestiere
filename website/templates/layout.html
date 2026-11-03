@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="{{htmlLang}}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{title}}</title>
+  <meta name="description" content="{{description}}">
+  <meta name="robots" content="{{robots}}">
+  <link rel="canonical" href="{{canonical}}">
+  {{hreflang}}
+  {{alternate}}
+  <link rel="describedby" type="text/markdown" href="/llms.txt" title="llms.txt">
+  <link rel="sitemap" type="application/xml" href="/sitemap.xml">
+
+  <meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+
+  <link rel="preload" href="/fonts/parmigiano-text-light.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/parmigiano-text-light-italic.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/parmigiano-text-bold.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/site.css">
+  <script src="/js/site.js" defer></script>
+
+  <meta property="og:type" content="{{ogType}}">
+  <meta property="og:site_name" content="mestiere">
+  <meta property="og:locale" content="{{ogLocale}}">
+  <meta property="og:locale:alternate" content="{{ogLocaleAlternate}}">
+  <meta property="og:url" content="{{canonical}}">
+  <meta property="og:title" content="{{ogTitle}}">
+  <meta property="og:description" content="{{description}}">
+  <meta property="og:image" content="https://mestiere.io/assets/social.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta property="og:image:alt" content="{{ogImageAlt}}">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{ogTitle}}">
+  <meta name="twitter:description" content="{{description}}">
+  <meta name="twitter:image" content="https://mestiere.io/assets/social.png">
+  {{jsonld}}
+</head>
+<body class="{{bodyClass}}">
+  <a class="skip-link" href="#main">{{skipLink}}</a>
+
+  <header class="site-header">
+    <div class="container header-inner">
+      <div class="brand-wrap">
+        <a class="brand" href="{{homeHref}}" aria-label="{{homeLabel}}">
+          <picture>
+            <source media="(prefers-color-scheme: dark)" srcset="/assets/logo-white.svg">
+            <img src="/assets/logo-black.svg" alt="mestiere" width="112" height="24">
+          </picture>
+        </a>
+        <span class="version-tag">{{liveVersionV}}</span>
+      </div>
+      <nav class="nav-wrap" aria-label="{{mainNavLabel}}">
+        <ul class="nav">
+          {{nav}}
+        </ul>
+        {{langSwitch}}
+        <a class="nav-github" href="https://github.com/polarity-dev/mestiere">{{githubIcon}}<span>GitHub</span></a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    {{body}}
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <nav aria-label="{{footerNavLabel}}">
+        <ul class="footer-links">
+          {{footerLinks}}
+        </ul>
+      </nav>
+      <p>mestiere {{liveVersionV}} · {{builtBy}} <a href="https://polarity.dev">Polarity</a> · © {{year}}</p>
+    </div>
+  </footer>
+</body>
+</html>

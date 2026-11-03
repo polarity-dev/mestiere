@@ -1,0 +1,17 @@
+{
+  "name": "mestiere-website",
+  "private": true,
+  "type": "module",
+  "description": "Static website of mestiere (mestiere.io)",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "node dev.mjs",
+    "lavagna": "node lavagna.mjs"
+  },
+  "devDependencies": {
+    "marked": "18.1.3"
+  }
+}

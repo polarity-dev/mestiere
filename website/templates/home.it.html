@@ -1,0 +1,127 @@
+<section class="hero" id="main" aria-labelledby="hero-title">
+      <div class="container hero-grid">
+        <div class="hero-text">
+          <p class="eyebrow">Gestore di Agent Skills per Claude Code, Kiro, Codex, Cursor e altri</p>
+          <h1 id="hero-title">Le skill degli agenti del tuo team, in ogni repository.</h1>
+          <p class="lead">Tieni le skill in un solo registry git. Ogni progetto installa quelle che gli servono, fissate a una versione esatta.</p>
+        </div>
+        <div class="hero-graphic">
+          {{heroGraphic}}
+        </div>
+        <div class="hero-install desktop-only">
+          <pre class="terminal"><code>brew install --cask polarity-dev/tap/mestiere</code></pre>
+          <p class="actions">
+            <a class="button" href="/docs/">Primi passi</a>
+            <a class="button button-primary" href="/install/">Installa mestiere</a>
+          </p>
+        </div>
+        <!-- On a phone there is no terminal: ask to continue on the computer instead -->
+        <div class="hero-install mobile-only">
+          <p class="actions">
+            <a class="button" href="#how-title">Come funziona</a>
+            <a class="button button-primary" data-share href="mailto:?subject=mestiere%3A%20le%20skill%20degli%20agenti%20per%20tutto%20il%20team&amp;body=https%3A%2F%2Fmestiere.io%2Fit%2F">Invia al mio computer</a>
+          </p>
+        </div>
+        <p class="hero-meta">{{liveVersionV}} · macOS e Linux · gratuito e open source su <a href="https://github.com/polarity-dev/mestiere">GitHub</a></p>
+      </div>
+    </section>
+
+    <section class="section section-alt" aria-labelledby="how-title">
+      <div class="container">
+        <h2 id="how-title">Come funziona</h2>
+        <ol class="steps">
+          <li>
+            <h3>Tieni le skill in un registry</h3>
+            <p>Un registry è un normale repository git di <a href="https://agentskills.io">Agent Skills</a>, raggruppate in namespace come <code>frontend</code> o <code>backend</code>. Revisiona le skill come qualsiasi altro codice.</p>
+          </li>
+          <li>
+            <h3>Installale in ogni progetto</h3>
+            <p><code>mestiere add frontend</code> copia le skill in <code>.agents/skills/</code> e blocca ognuna su un commit del registry in <code>skills.yaml</code>.</p>
+          </li>
+          <li>
+            <h3>Ogni agente le vede</h3>
+            <p>Codex, Gemini CLI, Cursor e Copilot leggono <code>.agents/skills/</code> direttamente; Claude Code e Kiro ricevono link nelle proprie cartelle. Colleghi e CI eseguono <code>mestiere sync</code> e ricevono gli stessi file.</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="section desktop-only" aria-labelledby="quick-start-title">
+      <div class="container">
+        <h2 id="quick-start-title">Avvio rapido</h2>
+        <div class="columns">
+          <div>
+            <h3>Installa le skill in un progetto</h3>
+            <pre class="terminal"><code>mestiere init --agents claude,kiro
+mestiere registry add polarity git@github.com:polarity-dev/skills.git
+mestiere add frontend backend/db-migrations
+git add skills.yaml .gitignore
+git commit -m "Add team skills"</code></pre>
+            <p>Un collega che clona il repository esegue <code>mestiere sync</code>.</p>
+            <p class="more"><a href="/docs/">Leggi la guida Primi passi</a></p>
+          </div>
+          <div>
+            <h3>Pubblica le skill in un registry</h3>
+            <pre class="terminal"><code>mkdir skills &amp;&amp; cd skills &amp;&amp; git init
+mestiere registry init --name polarity
+mestiere registry new-namespace frontend --description "Frontend practices"
+mestiere registry new-skill frontend/forms --description "Build accessible forms"
+mestiere registry lint</code></pre>
+            <p>Fai il push, e qualsiasi progetto può aggiungerlo.</p>
+            <p class="more"><a href="/docs/registries/">Scopri come creare un registry</a></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-alt mobile-plain" aria-labelledby="why-title">
+      <div class="container">
+        <h2 id="why-title">Perché mestiere</h2>
+        <p class="section-lead">Il <em>mestiere</em> è il saper fare che una bottega passa da una persona all'altra. mestiere fa lo stesso per gli agenti di programmazione.</p>
+        <ul class="features">
+          <li><h3>Una sola fonte di verità</h3><p>Le skill vivono in un registry git, pubblico o privato, revisionato come qualsiasi altro codice.</p></li>
+          <li><h3>Organizzate per namespace</h3><p>Installa un intero namespace o una singola skill. Le nuove skill di un namespace installato arrivano al prossimo aggiornamento.</p></li>
+          <li><h3>Riproducibili</h3><p>Ogni installazione è bloccata su un commit del registry e un hash del contenuto. Colleghi e CI ricevono skill identiche byte per byte.</p></li>
+          <li><h3>Tutti gli agenti insieme</h3><p>I file vivono una sola volta in <code>.agents/skills/</code>, che Codex, Gemini CLI, Cursor e altri leggono direttamente. Claude Code e Kiro ricevono symlink verso di essa.</p></li>
+          <li><h3>Non ti intralcia</h3><p>Le skill installate sono ignorate da git per impostazione predefinita. Le tue skill restano accanto a loro intatte, e fare il commit di una skill richiede un solo comando.</p></li>
+          <li><h3>Sicuro per costruzione</h3><p>mestiere sostituisce una cartella solo quando può dimostrare che è una copia non modificata di una skill pubblicata. <a href="/docs/how-it-works/#safety-model">Vedi il modello di sicurezza</a>.</p></li>
+          <li><h3>Nessun lock-in</h3><p>I registry sono normali repository git. Le skill installate sono normali cartelle che seguono la specifica Agent Skills.</p></li>
+          <li><h3>Il tuo git, la tua autenticazione</h3><p>mestiere usa il <code>git</code> di sistema, quindi chiavi SSH, credential helper e <code>gh auth</code> funzionano senza altro.</p></li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section desktop-only" aria-labelledby="agents-title">
+      <div class="container narrow">
+        <h2 id="agents-title">Oppure fallo configurare al tuo agente</h2>
+        <p>L'installazione con Homebrew dà anche a Claude Code e Kiro le skill di mestiere, per ogni progetto sulla tua macchina. Poi chiedi al tuo agente, da qualsiasi repository:</p>
+        <pre class="terminal prompt"><code>Configura mestiere per questo repo con il nostro registry git@github.com:polarity-dev/skills.git</code></pre>
+        <p>L'agente esegue <code>mestiere init</code>, ti mostra cosa offre il registry, installa le skill adatte al codice e fa il commit di <code>skills.yaml</code>. I prompt successivi funzionano allo stesso modo: "Qualcuna delle nostre skill è obsoleta? Aggiornale e riassumi cosa è cambiato".</p>
+        <p>Hai installato in un altro modo? Esegui una volta <code>mestiere add -g mestiere</code>. Gli agenti che leggono il web possono partire da <a href="/llms.txt">llms.txt</a>.</p>
+        <p class="more"><a href="/docs/agents/">Di più sugli agenti</a></p>
+      </div>
+    </section>
+
+    <section class="section section-alt" aria-labelledby="faq-title">
+      <div class="container narrow">
+        <h2 id="faq-title">Domande frequenti</h2>
+        <div class="faq">
+          {{faq}}
+        </div>
+      </div>
+    </section>
+
+    <section class="section cta" aria-labelledby="cta-title">
+      <div class="container narrow">
+        <h2 id="cta-title">Dai a ogni repository le stesse skill</h2>
+        <p class="actions desktop-only">
+          <a class="button" href="/docs/commands/">Sfoglia i comandi</a>
+          <a class="button button-primary" href="/install/">Installa mestiere</a>
+        </p>
+        <p class="cta-note mobile-only">mestiere funziona nel terminale del tuo Mac o della tua macchina Linux. Inviati il link e configuralo in due minuti.</p>
+        <p class="actions mobile-only">
+          <a class="button button-github" href="https://github.com/polarity-dev/mestiere">{{githubIcon}}<span>Aggiungi una stella su GitHub</span></a>
+          <a class="button button-primary" data-share href="mailto:?subject=mestiere%3A%20le%20skill%20degli%20agenti%20per%20tutto%20il%20team&amp;body=https%3A%2F%2Fmestiere.io%2Fit%2F">Invia al mio computer</a>
+        </p>
+      </div>
+    </section>

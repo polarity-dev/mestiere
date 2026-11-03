@@ -1,0 +1,388 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  mestiere.io - static website of the mestiere CLI: private S3 bucket behind
+  CloudFront (OAC). The DNS zone lives in another account and is managed by
+  website/ops.sh, not by this stack.
+
+Parameters:
+  DomainName:
+    Type: String
+    Default: mestiere.io
+    Description: Canonical hostname. www.<DomainName> redirects to it.
+  CertificateArn:
+    Type: String
+    Default: ''
+    Description: >-
+      ACM certificate in us-east-1 (this account) covering DomainName and
+      www.DomainName. Empty = only the cloudfront.net hostname.
+  GitHubRepository:
+    Type: String
+    Default: polarity-dev/mestiere
+    Description: Repository whose main branch may deploy the site (GitHub Actions OIDC).
+  GitHubOidcProviderArn:
+    Type: String
+    Default: ''
+    Description: >-
+      Existing token.actions.githubusercontent.com OIDC provider of this
+      account. Empty = this stack creates it (one per account).
+
+Conditions:
+  HasDomain: !Not [!Equals [!Ref CertificateArn, '']]
+  CreateOidcProvider: !Equals [!Ref GitHubOidcProviderArn, '']
+
+Resources:
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Condition: CreateOidcProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList: [sts.amazonaws.com]
+      Tags:
+        - Key: project
+          Value: mestiere
+
+  # Assumed by .github/workflows/website.yml on pushes to main: upload dist/
+  # and invalidate the cache, nothing else.
+  GitHubDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: mestiere-website-github-deploy
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !If
+                - CreateOidcProvider
+                - !Ref GitHubOidcProvider
+                - !Ref GitHubOidcProviderArn
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: !Sub repo:${GitHubRepository}:ref:refs/heads/main
+      Policies:
+        - PolicyName: deploy-website
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: s3:ListBucket
+                Resource: !GetAtt SiteBucket.Arn
+              - Effect: Allow
+                Action: [s3:GetObject, s3:PutObject, s3:DeleteObject]
+                Resource: !Sub '${SiteBucket.Arn}/*'
+              - Effect: Allow
+                Action: cloudfront:CreateInvalidation
+                Resource: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${Distribution}
+              - Effect: Allow
+                Action: cloudformation:DescribeStacks
+                Resource: !Ref AWS::StackId
+
+  SiteBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub mestiere-website-${AWS::AccountId}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+
+  SiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SiteBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowCloudFrontRead
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub '${SiteBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${Distribution}
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt SiteBucket.Arn
+              - !Sub '${SiteBucket.Arn}/*'
+            Condition:
+              Bool:
+                aws:SecureTransport: 'false'
+
+  SiteOriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: mestiere-website
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  # Viewer request, one canonical URL per page (SEO):
+  #   www.<domain>/x      -> 301 https://<domain>/x
+  #   /docs               -> 301 /docs/
+  #   /docs/index.html    -> 301 /docs/
+  #   /docs/              -> served from /docs/index.html
+  ViewerRequestFunction:
+    Type: AWS::CloudFront::Function
+    Properties:
+      Name: mestiere-website-viewer-request
+      AutoPublish: true
+      FunctionConfig:
+        Comment: mestiere.io redirects, clean URLs and the language redirect
+        Runtime: cloudfront-js-2.0
+      FunctionCode: !Sub |
+        function redirect(path, querystring) {
+          var qs = Object.keys(querystring).map(function (k) {
+            var v = querystring[k];
+            return v.value === '' ? k : k + '=' + v.value;
+          }).join('&');
+          return {
+            statusCode: 301,
+            statusDescription: 'Moved Permanently',
+            headers: {
+              location: { value: 'https://${DomainName}' + path + (qs ? '?' + qs : '') },
+              'cache-control': { value: 'public, max-age=86400' }
+            }
+          };
+        }
+        // Language. Italian pages live under /it/. A reader who never chose a language and
+        // whose browser asks for Italian first (Accept-Language) is sent to the /it/ page before
+        // anything loads. The language switch links carry ?lang=en|it: that choice is stored in
+        // the mestiere_lang cookie for a year and always wins over the browser language.
+        // Language redirects are 302 + no-store, so neither CloudFront nor browsers cache them.
+        function withoutLang(querystring) {
+          var rest = {};
+          Object.keys(querystring).forEach(function (k) {
+            if (k !== 'lang') rest[k] = querystring[k];
+          });
+          return rest;
+        }
+        function temporaryRedirect(path, querystring, cookies) {
+          var qs = Object.keys(querystring).map(function (k) {
+            var v = querystring[k];
+            return v.value === '' ? k : k + '=' + v.value;
+          }).join('&');
+          var response = {
+            statusCode: 302,
+            statusDescription: 'Found',
+            headers: {
+              location: { value: 'https://${DomainName}' + path + (qs ? '?' + qs : '') },
+              'cache-control': { value: 'no-store' }
+            }
+          };
+          if (cookies) response.cookies = cookies;
+          return response;
+        }
+        function preferredLanguage(request) {
+          var cookie = request.cookies.mestiere_lang;
+          if (cookie && (cookie.value === 'en' || cookie.value === 'it')) return cookie.value;
+          var header = request.headers['accept-language'];
+          // The first language listed is the browser's preferred one, e.g. "it-IT,it;q=0.9,en;q=0.8"
+          var first = header ? header.value.split(',')[0].trim().toLowerCase() : '';
+          return first.slice(0, 2) === 'it' ? 'it' : 'en';
+        }
+        function isPage(uri) {
+          return uri.endsWith('/') || uri.split('/').pop().indexOf('.') === -1;
+        }
+        function handler(event) {
+          var request = event.request;
+          var uri = request.uri;
+          var host = request.headers.host ? request.headers.host.value : '';
+          if (host === 'www.${DomainName}') {
+            return redirect(uri, request.querystring);
+          }
+          var chosen = request.querystring.lang ? request.querystring.lang.value : '';
+          if (chosen === 'en' || chosen === 'it') {
+            return temporaryRedirect(uri, withoutLang(request.querystring), {
+              mestiere_lang: { value: chosen, attributes: 'Path=/; Max-Age=31536000; Secure; SameSite=Lax' }
+            });
+          }
+          var italian = uri === '/it' || uri.indexOf('/it/') === 0;
+          if (!italian && isPage(uri) && preferredLanguage(request) === 'it') {
+            return temporaryRedirect('/it' + uri, request.querystring);
+          }
+          if (uri.endsWith('/index.html')) {
+            return redirect(uri.slice(0, -'index.html'.length), request.querystring);
+          }
+          if (uri.endsWith('/')) {
+            request.uri = uri + 'index.html';
+            return request;
+          }
+          if (uri.split('/').pop().indexOf('.') === -1) {
+            return redirect(uri + '/', request.querystring);
+          }
+          return request;
+        }
+
+  SecurityHeadersPolicy:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: mestiere-website-security-headers
+        SecurityHeadersConfig:
+          StrictTransportSecurity:
+            AccessControlMaxAgeSec: 63072000
+            IncludeSubdomains: true
+            Preload: false
+            Override: true
+          ContentTypeOptions:
+            Override: true
+          FrameOptions:
+            FrameOption: DENY
+            Override: true
+          ReferrerPolicy:
+            ReferrerPolicy: strict-origin-when-cross-origin
+            Override: true
+          # The site is self-contained: no third-party scripts, fonts or images.
+          ContentSecurityPolicy:
+            ContentSecurityPolicy: >-
+              default-src 'self'; img-src 'self' data:; style-src 'self';
+              script-src 'self'; font-src 'self'; connect-src 'self' https://raw.githubusercontent.com https://api.github.com;
+              object-src 'none'; base-uri 'self'; form-action 'none';
+              frame-ancestors 'none'; upgrade-insecure-requests
+            Override: true
+        CustomHeadersConfig:
+          Items:
+            - Header: Permissions-Policy
+              Value: camera=(), microphone=(), geolocation=()
+              Override: true
+            # llms.txt v2: point every response at the LLM index.
+            - Header: Link
+              Value: '</llms.txt>; rel="describedby"; type="text/markdown"'
+              Override: false
+
+  # Markdown twins and llms files are for agents: readable by anyone, kept out
+  # of search results so they don't compete with the HTML pages.
+  AgentFilesHeadersPolicy:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: mestiere-website-agent-files
+        SecurityHeadersConfig:
+          StrictTransportSecurity:
+            AccessControlMaxAgeSec: 63072000
+            IncludeSubdomains: true
+            Preload: false
+            Override: true
+          ContentTypeOptions:
+            Override: true
+        CorsConfig:
+          AccessControlAllowOrigins:
+            Items: ['*']
+          AccessControlAllowMethods:
+            Items: [GET, HEAD]
+          AccessControlAllowHeaders:
+            Items: ['*']
+          AccessControlAllowCredentials: false
+          OriginOverride: true
+        CustomHeadersConfig:
+          Items:
+            - Header: X-Robots-Tag
+              Value: noindex
+              Override: true
+            - Header: Link
+              Value: '</llms.txt>; rel="describedby"; type="text/markdown"'
+              Override: false
+
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Comment: mestiere.io website
+        Enabled: true
+        HttpVersion: http2and3
+        IPV6Enabled: true
+        PriceClass: PriceClass_100
+        DefaultRootObject: index.html
+        Aliases: !If
+          - HasDomain
+          - [!Ref DomainName, !Sub 'www.${DomainName}']
+          - !Ref AWS::NoValue
+        ViewerCertificate: !If
+          - HasDomain
+          - AcmCertificateArn: !Ref CertificateArn
+            SslSupportMethod: sni-only
+            MinimumProtocolVersion: TLSv1.2_2021
+          - !Ref AWS::NoValue
+        Origins:
+          - Id: site
+            DomainName: !GetAtt SiteBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt SiteOriginAccessControl.Id
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+        DefaultCacheBehavior:
+          TargetOriginId: site
+          ViewerProtocolPolicy: redirect-to-https
+          Compress: true
+          AllowedMethods: [GET, HEAD]
+          CachedMethods: [GET, HEAD]
+          # Managed-CachingOptimized: honors the Cache-Control set on upload.
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          ResponseHeadersPolicyId: !Ref SecurityHeadersPolicy
+          FunctionAssociations:
+            - EventType: viewer-request
+              FunctionARN: !GetAtt ViewerRequestFunction.FunctionMetadata.FunctionARN
+        CacheBehaviors:
+          - PathPattern: '*.md'
+            TargetOriginId: site
+            ViewerProtocolPolicy: redirect-to-https
+            Compress: true
+            AllowedMethods: [GET, HEAD]
+            CachedMethods: [GET, HEAD]
+            CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+            ResponseHeadersPolicyId: !Ref AgentFilesHeadersPolicy
+            FunctionAssociations:
+              - EventType: viewer-request
+                FunctionARN: !GetAtt ViewerRequestFunction.FunctionMetadata.FunctionARN
+          - PathPattern: '/llms*.txt'
+            TargetOriginId: site
+            ViewerProtocolPolicy: redirect-to-https
+            Compress: true
+            AllowedMethods: [GET, HEAD]
+            CachedMethods: [GET, HEAD]
+            CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+            ResponseHeadersPolicyId: !Ref AgentFilesHeadersPolicy
+            FunctionAssociations:
+              - EventType: viewer-request
+                FunctionARN: !GetAtt ViewerRequestFunction.FunctionMetadata.FunctionARN
+        # Without s3:ListBucket a missing key is a 403, not a 404.
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 404
+            ResponsePagePath: /404.html
+            ErrorCachingMinTTL: 60
+          - ErrorCode: 404
+            ResponseCode: 404
+            ResponsePagePath: /404.html
+            ErrorCachingMinTTL: 60
+
+Outputs:
+  SiteUrl:
+    Value: !If
+      - HasDomain
+      - !Sub https://${DomainName}
+      - !Sub https://${Distribution.DomainName}
+  DistributionDomainName:
+    Value: !GetAtt Distribution.DomainName
+  DistributionId:
+    Value: !Ref Distribution
+  SiteBucketName:
+    Value: !Ref SiteBucket
+  GitHubDeployRoleArn:
+    Value: !GetAtt GitHubDeployRole.Arn

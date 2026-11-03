@@ -1,0 +1,8 @@
+{
+  "defaultEnvironment": "production",
+  "environments": {
+    "production": { "project": "polarity/mestiere" }
+  },
+  "dist": "dist-lavagna",
+  "comments": { "author": "kiro" }
+}
