@@ -1,0 +1,78 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+
+project_name: mestiere
+
+builds:
+  - id: mestiere
+    main: ./cmd/mestiere
+    binary: mestiere
+    env:
+      - CGO_ENABLED=0
+    goos: [darwin, linux]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w -X github.com/polarity-dev/mestiere/internal/cli.Version={{ .Version }}
+
+archives:
+  - id: mestiere
+    formats: [tar.gz]
+    # Versionless names keep releases/latest/download/<name> stable across releases.
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE*
+      - README*
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+release:
+  github:
+    owner: polarity-dev
+    name: mestiere
+  prerelease: auto
+
+homebrew_casks:
+  - name: mestiere
+    repository:
+      owner: polarity-dev
+      name: homebrew-tap
+    directory: Casks
+    homepage: https://github.com/polarity-dev/mestiere
+    description: Install agent skills from git registries
+    binaries: [mestiere]
+    caveats: |
+      mestiere installed its own agent skills globally, so agents in any folder can set it up.
+      Run `mestiere remove -g mestiere` before uninstalling to remove them.
+    hooks:
+      post:
+        # shortcut: binaries aren't signed or notarized, so Gatekeeper's quarantine flag is cleared; add notarize.macos once a Developer ID is available.
+        # The macOS sandbox replaces HOME with a scratch directory and blocks reading ~/.gitconfig, so the
+        # real home is passed back and git skips user config; the built-in registry is public over https.
+        # Every path mestiere writes is listed, and a failed skill install must not fail brew.
+        install_steps: |
+          paths = [".config/mestiere", ".agents", ".claude", ".kiro", "Library/Caches/mestiere", ".cache/mestiere"]
+          on_macos do
+            run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ "{{" }}staged_path{{ "}}" }}/mestiere"]
+            ["add", "update"].each do |verb|
+              run "{{ "{{" }}staged_path{{ "}}" }}/mestiere", args: [verb, "-g", "mestiere"],
+                  env: { "HOME" => "/Users/{{ "{{" }}user{{ "}}" }}", "GIT_CONFIG_GLOBAL" => "/dev/null" },
+                  must_succeed: false, network_access: true, writable_base: :home, writable_paths: paths
+            end
+          end
+          on_linux do
+            ["add", "update"].each do |verb|
+              run "{{ "{{" }}staged_path{{ "}}" }}/mestiere", args: [verb, "-g", "mestiere"],
+                  must_succeed: false, network_access: true, writable_base: :home, writable_paths: paths
+            end
+          end

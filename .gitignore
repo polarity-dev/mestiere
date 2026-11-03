@@ -1,0 +1,17 @@
+# GoReleaser output
+/dist/
+
+# Locally built binaries
+/mestiere
+*.test
+*.out
+coverage.*
+
+# Editors and OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# mestiere: skills are ignored by default; add !<dir>/skills/<name> to commit one
+**/.*/skills/*
