@@ -63,7 +63,10 @@ createServer((req, res) => {
     return;
   }
   const isPage = path.endsWith('/') || !extname(path);
-  if (isPage && !path.startsWith('/it/') && path !== '/it') {
+  // Crawlers and link-preview fetchers are never redirected (same list as infra/site.yaml)
+  const crawler = /bot|crawl|spider|slurp|preview|facebookexternalhit|facebookcatalog|meta-external|linkedin|whatsapp|telegram|discord|slack|skype|pinterest|vkshare|embedly|iframely|quora|mastodon|bluesky|cardyb|snapchat|line-poker|google-inspectiontool|lighthouse|validator/i
+    .test(req.headers['user-agent'] || '');
+  if (isPage && !crawler && !path.startsWith('/it/') && path !== '/it') {
     const cookie = (req.headers.cookie || '').match(/(?:^|;\s*)mestiere_lang=(en|it)/);
     const preferred = cookie ? cookie[1] : (req.headers['accept-language'] || '').trim().slice(0, 2).toLowerCase();
     if (preferred === 'it') {

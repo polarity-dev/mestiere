@@ -5,7 +5,8 @@
 // content/it/**    -> the Italian site under /it/ (same page set, same slugs, same heading ids)
 // templates/       -> layout.html (every page) and home.html / home.it.html (the / body)
 // static/          -> copied as is
-// generated        -> sitemap.xml, robots.txt, llms.txt, llms-full.txt, 404.html
+// generated        -> sitemap.xml, robots.txt, llms.txt, llms-full.txt, 404.html,
+//                     assets/og/<lang>/<page>.png (link preview images, og-image.mjs)
 //
 // The build fails on broken internal links and anchors.
 import { execFileSync } from 'node:child_process';
@@ -14,6 +15,7 @@ import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Marked, Renderer } from 'marked';
 import { heroGraphic, notFoundGraphic } from './hero-graphic.mjs';
+import { homeSvg, OG_HEIGHT, OG_WIDTH, pageSvg, renderPng } from './og-image.mjs';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const CONTENT = join(ROOT, 'content');
@@ -43,7 +45,8 @@ const STRINGS = {
     footer: { install: 'Install', start: 'Getting started', commands: 'Command reference', registries: 'Registries', releases: 'Releases' },
     builtBy: 'built by', docs: 'Documentation', docsMenu: 'Documentation menu', toc: 'On this page',
     pagerNav: 'Previous and next page', prev: '← Previous', next: 'Next →', updated: 'Updated',
-    markdownVersion: 'Markdown version', switchTo: 'Read in English', ogImageAlt: 'The mestiere logo, white on black',
+    markdownVersion: 'Markdown version', switchTo: 'Read in English',
+    ogTagline: "Your team's agent skills, versioned in git.", installEyebrow: 'Install',
     loomTitle: 'One skills registry feeding every repository of a team', crumbDocs: 'Docs',
   },
   it: {
@@ -52,7 +55,8 @@ const STRINGS = {
     footer: { install: 'Installazione', start: 'Primi passi', commands: 'Riferimento comandi', registries: 'Registry', releases: 'Release' },
     builtBy: 'fatto da', docs: 'Documentazione', docsMenu: 'Menu della documentazione', toc: 'In questa pagina',
     pagerNav: 'Pagina precedente e successiva', prev: '← Precedente', next: 'Successiva →', updated: 'Aggiornata il',
-    markdownVersion: 'Versione Markdown', switchTo: 'Leggi in italiano', ogImageAlt: 'Il logo di mestiere, bianco su nero',
+    markdownVersion: 'Versione Markdown', switchTo: 'Leggi in italiano',
+    ogTagline: 'Le skill degli agenti del tuo team, versionate in git.', installEyebrow: 'Installazione',
     loomTitle: 'Un registry di skill che alimenta ogni repository di un team', crumbDocs: 'Documentazione',
   },
 };
@@ -219,9 +223,23 @@ function loadPages(lang) {
       markdown,
       htmlMarkdown,
       modified: lastModified(file),
+      ogImage: ogImagePath(lang, key),
     };
   }).sort((a, b) => a.order - b.order);
 }
+
+// Social preview image of a page: /assets/og/<lang>/<slug>.png, rendered by build() (og-image.mjs).
+const ogImagePath = (lang, key) => `/assets/og/${lang}/${key === '/' ? 'home' : key.slice(1, -1).replaceAll('/', '-')}.png`;
+const ogEyebrow = (page) => {
+  const t = STRINGS[page.lang];
+  return page.key.startsWith('/docs/') ? t.docs : page.key === '/install/' ? t.installEyebrow : 'mestiere';
+};
+const ogImageAlt = (page) => (page.key === '/'
+  ? `mestiere: ${STRINGS[page.lang].ogTagline}`
+  : `mestiere, ${ogEyebrow(page)}: ${page.title}`);
+const ogImageSvg = (page) => (page.key === '/'
+  ? homeSvg({ tagline: STRINGS[page.lang].ogTagline })
+  : pageSvg({ eyebrow: ogEyebrow(page), title: page.title, description: page.description, url: page.url.replace(/^https:\/\//, '') }));
 
 // Pages in the docs sidebar, in reading order.
 const docPages = (pages) => pages.filter((p) => p.path !== '/');
@@ -395,7 +413,15 @@ function renderPage({ page, body, graph, robots = 'index, follow, max-snippet:-1
     hreflang: hreflangLinks(page),
     ogLocale: LANGS[page.lang].locale,
     ogLocaleAlternate: LANGS[otherLang(page.lang)].locale,
-    ogImageAlt: t.ogImageAlt,
+    // The 404 page has no image of its own: it shows the home one
+    ogImage: SITE.url + (page.ogImage ?? ogImagePath(page.lang, '/')),
+    ogImageWidth: String(OG_WIDTH),
+    ogImageHeight: String(OG_HEIGHT),
+    ogImageAlt: escapeHtml(page.ogImage ? ogImageAlt(page) : `mestiere: ${t.ogTagline}`),
+    // Facebook and LinkedIn read the date of an article; the home page is a website
+    ogArticle: page.key && page.key !== '/' && page.modified
+      ? `<meta property="article:modified_time" content="${page.modified}">`
+      : '',
     skipLink: t.skipLink,
     menuLabel: t.menu,
     homeHref: '/',
@@ -410,7 +436,7 @@ function renderPage({ page, body, graph, robots = 'index, follow, max-snippet:-1
     canonical: page.url,
     robots,
     ogType: page.key === '/' ? 'website' : 'article',
-    ogTitle: escapeHtml(page.key === '/' ? 'mestiere' : page.seoTitle),
+    ogTitle: escapeHtml(page.seoTitle),
     alternate,
     jsonld: graph ? jsonLd(graph) : '',
     bodyClass,
@@ -458,7 +484,7 @@ ${html}
       about: { '@id': SOFTWARE['@id'] },
       author: { '@id': ORG['@id'] },
       publisher: { '@id': ORG['@id'] },
-      image: `${SITE.url}/assets/social.png`,
+      image: SITE.url + page.ogImage,
     },
     breadcrumbs(page),
   ];
@@ -480,7 +506,7 @@ function renderHome(pages, page) {
     {
       '@type': 'WebPage', '@id': `${page.url}#webpage`, url: page.url, name: page.seoTitle,
       description: page.description, isPartOf: { '@id': WEBSITE['@id'] }, about: { '@id': SOFTWARE['@id'] },
-      primaryImageOfPage: `${SITE.url}/assets/social.png`, inLanguage: page.lang,
+      primaryImageOfPage: SITE.url + page.ogImage, inLanguage: page.lang,
     },
     {
       '@type': 'FAQPage', '@id': `${page.url}#faq`,
@@ -592,6 +618,8 @@ function llmsFullTxt(pages) {
   return `# mestiere documentation\n\n> ${SITE.tagline}\n\nSource: ${SITE.url}/llms.txt.\n\n${parts.join('\n---\n\n')}`;
 }
 
+// Every page in both languages gets its own <url>, each listing all the versions (Google's rule
+// for hreflang in sitemaps), English first and then Italian.
 function sitemap(pages) {
   const urls = pages.map((p) => `  <url>
     <loc>${p.url}</loc>
@@ -709,9 +737,10 @@ export function build() {
       write(join(DIST, page.path, 'index.md'), markdownTwin(page));
     }
   }
+  for (const page of [...byLang.en, ...byLang.it]) write(join(DIST, page.ogImage), renderPng(ogImageSvg(page)));
   const pages = byLang.en;
   write(join(DIST, '404.html'), render404());
-  write(join(DIST, 'sitemap.xml'), sitemap(pages));
+  write(join(DIST, 'sitemap.xml'), sitemap([...byLang.en, ...byLang.it]));
   write(join(DIST, 'robots.txt'), robotsTxt());
   write(join(DIST, 'llms.txt'), llmsTxt(pages));
   write(join(DIST, 'llms-full.txt'), llmsFullTxt(pages));

@@ -35,10 +35,11 @@ Add a page by adding a Markdown file under `content/`: `content/docs/foo.md` bec
 | Output | For |
 |---|---|
 | `<page>/index.html` | People and search engines: canonical URL, meta description, Open Graph, JSON-LD (`SoftwareApplication`, `FAQPage`, `TechArticle`, `BreadcrumbList`) |
+| `assets/og/<lang>/<page>.png` | Link previews (Open Graph / X card, 1200x630): one per page and language, drawn by `og-image.mjs` with the page title and description, cached in `node_modules/.cache/mestiere-og` |
 | `<page>/index.md` | Agents: the same page as Markdown ([llms.txt v2](https://llmstxt.org/) convention), linked with `rel="alternate"` |
 | `llms.txt` | Agents: index of the Markdown pages with key facts about the CLI |
 | `llms-full.txt` | Agents: every page in one file |
-| `sitemap.xml` | Search engines, `lastmod` from each file's last commit |
+| `sitemap.xml` | Search engines: every page in both languages with its `hreflang` alternates, `lastmod` from each file's last commit |
 | `robots.txt` | Everyone allowed, AI crawlers listed explicitly |
 | `404.html` | `noindex` error page |
 
@@ -89,7 +90,7 @@ cd website && npm run build && npm run lavagna && lavagna push --yes
 - Brand: black and white only. Headings and lead text use Parmigiano Text Light, h3 Parmigiano
   Text Bold (a licensed Typotheque font: only the woff2 web files ship here, converted from the
   OTFs in `docs/assets/fonts/`, which git ignores), body text the system sans.
-- `static/assets/`: `logo-*.svg` are copies of `docs/assets/mestiere-wordmark-*.svg`, `mark-*.svg` of `docs/assets/mestiere-mark-*.svg`, `social.png` of `docs/assets/mestiere-social.png`. See `docs/brand.md`.
+- `static/assets/`: `logo-*.svg` are copies of `docs/assets/mestiere-wordmark-*.svg`, `mark-*.svg` of `docs/assets/mestiere-mark-*.svg`, `social.png` of `docs/assets/mestiere-social.png` (only the JSON-LD `SoftwareApplication` image: link previews use the generated `assets/og/` images). See `docs/brand.md`.
 - Phones get different content (`.mobile-only` / `.desktop-only`, below 760px): there is no
   terminal on a phone, so the landing there only promotes. Commands, Quick start and "Teach
   your agent" are desktop only, and the calls to action send the link to a computer.
@@ -105,7 +106,8 @@ cd website && npm run build && npm run lavagna && lavagna push --yes
 - Language choice happens in the CloudFront function, before the page loads: a reader who never
   chose goes to `/it/` when the browser's first language (`Accept-Language`) is Italian. The
   switch links carry `?lang=en|it`, which sets the `mestiere_lang` cookie for a year and always
-  wins. Crawlers send no `Accept-Language` and get English; `hreflang` and the sitemap list both.
+  wins. Crawlers and link-preview fetchers (matched by user agent) are never redirected, so a
+  shared link previews exactly the page that was shared; `hreflang` and the sitemap list both.
   `dev.mjs` applies the same rules locally.
 - Navigation doesn't reload the page: `site.js` intercepts links to pages of the same language,
   fetches the page (prefetched on hover), swaps `<main>`, the nav state, the title and the head

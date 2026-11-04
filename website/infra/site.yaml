@@ -197,6 +197,14 @@ Resources:
           var first = header ? header.value.split(',')[0].trim().toLowerCase() : '';
           return first.slice(0, 2) === 'it' ? 'it' : 'en';
         }
+        // Search engines and link-preview fetchers (social networks, chat apps) always get the
+        // URL they asked for: Google advises against language redirects for crawlers, and a shared
+        // link must preview the page that was shared, whatever language the fetcher sends.
+        var CRAWLER = /bot|crawl|spider|slurp|preview|facebookexternalhit|facebookcatalog|meta-external|linkedin|whatsapp|telegram|discord|slack|skype|pinterest|vkshare|embedly|iframely|quora|mastodon|bluesky|cardyb|snapchat|line-poker|google-inspectiontool|lighthouse|validator/i;
+        function isCrawler(request) {
+          var ua = request.headers['user-agent'];
+          return ua ? CRAWLER.test(ua.value) : false;
+        }
         function isPage(uri) {
           return uri.endsWith('/') || uri.split('/').pop().indexOf('.') === -1;
         }
@@ -214,7 +222,7 @@ Resources:
             });
           }
           var italian = uri === '/it' || uri.indexOf('/it/') === 0;
-          if (!italian && isPage(uri) && preferredLanguage(request) === 'it') {
+          if (!italian && isPage(uri) && !isCrawler(request) && preferredLanguage(request) === 'it') {
             return temporaryRedirect('/it' + uri, request.querystring);
           }
           if (uri.endsWith('/index.html')) {
