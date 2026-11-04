@@ -58,12 +58,19 @@ func (s Spec) String() string {
 
 func (s Spec) InstalledName() string { return s.Namespace + "-" + s.Skill }
 
+// RegistryPath is skills/<ns> or skills/<ns>/<ns>-<skill>. The skill folder
+// carries the prefix because the Agent Skills spec requires a skill's folder
+// to match the name in its SKILL.md.
 func (s Spec) RegistryPath() string {
 	if s.Skill == "" {
 		return "skills/" + s.Namespace
 	}
-	return "skills/" + s.Namespace + "/" + s.Skill
+	return "skills/" + s.Namespace + "/" + s.InstalledName()
 }
+
+// V1Path is skills/<ns>/<skill>, where mestiere 1.0 kept a skill. Registries
+// can't use it any more, but 1.0 locks and installs still come from it.
+func (s Spec) V1Path() string { return "skills/" + s.Namespace + "/" + s.Skill }
 
 // Covers reports whether the spec includes the given single-skill spec.
 func (s Spec) Covers(other Spec) bool {
@@ -112,14 +119,15 @@ func ParseSpec(raw string) (Spec, error) {
 	return spec, nil
 }
 
-// ParsePath maps a registry path skills/<ns>/<skill> to its spec.
+// ParsePath maps a registry path skills/<ns>/<ns>-<skill> to its spec.
 func ParsePath(path string) (Spec, bool) {
 	parts := strings.Split(path, "/")
 	if len(parts) != 3 || parts[0] != "skills" {
 		return Spec{}, false
 	}
-	spec := Spec{Namespace: parts[1], Skill: parts[2]}
-	if spec.validate() != nil {
+	skill, ok := strings.CutPrefix(parts[2], parts[1]+"-")
+	spec := Spec{Namespace: parts[1], Skill: skill}
+	if !ok || spec.validate() != nil {
 		return Spec{}, false
 	}
 	return spec, true

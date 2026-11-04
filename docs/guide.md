@@ -33,7 +33,7 @@ registries:
       - frontend/legacy-forms     # skip one skill of an installed namespace
     lock: # written by mestiere
       frontend-forms:
-        path: skills/frontend/forms
+        path: skills/frontend/frontend-forms
         commit: 3f2a9c1e...
         tree: 9be1d07a...
 ```

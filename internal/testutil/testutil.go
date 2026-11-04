@@ -83,7 +83,7 @@ func (r *Registry) Write(rel, content string) {
 
 // Skill writes a valid SKILL.md for ns/skill with body as its instructions.
 func (r *Registry) Skill(ns, skill, body string) {
-	r.Write(fmt.Sprintf("skills/%s/%s/SKILL.md", ns, skill),
+	r.Write(fmt.Sprintf("skills/%s/%s-%s/SKILL.md", ns, ns, skill),
 		fmt.Sprintf("---\nname: %s-%s\ndescription: Test skill %s.\n---\n\n%s\n", ns, skill, skill, body))
 }
 

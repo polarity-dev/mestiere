@@ -60,16 +60,17 @@ func TestLintFindsProblems(t *testing.T) {
 	dir := scaffold(t)
 	skills := filepath.Join(dir, "skills")
 	testutil.WriteFile(t, filepath.Join(skills, "front-end", "x", "SKILL.md"), "---\nname: x\n---\n", 0o644)
-	testutil.WriteFile(t, filepath.Join(skills, "frontend", "wrong-name", "SKILL.md"), "---\nname: other\ndescription: d\n---\n", 0o644)
-	testutil.WriteFile(t, filepath.Join(skills, "frontend", "no-description", "SKILL.md"), "---\nname: frontend-no-description\n---\n", 0o644)
-	if err := os.MkdirAll(filepath.Join(skills, "frontend", "empty"), 0o755); err != nil {
+	testutil.WriteFile(t, filepath.Join(skills, "frontend", "frontend-wrong-name", "SKILL.md"), "---\nname: other\ndescription: d\n---\n", 0o644)
+	testutil.WriteFile(t, filepath.Join(skills, "frontend", "frontend-no-description", "SKILL.md"), "---\nname: frontend-no-description\n---\n", 0o644)
+	testutil.WriteFile(t, filepath.Join(skills, "frontend", "unprefixed", "SKILL.md"), "---\nname: frontend-unprefixed\ndescription: d\n---\n", 0o644)
+	if err := os.MkdirAll(filepath.Join(skills, "frontend", "frontend-empty"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	testutil.WriteFile(t, filepath.Join(skills, "frontend", "react-patterns", ".DS_Store"), "", 0o644)
-	testutil.WriteFile(t, filepath.Join(skills, "frontend", "react-patterns", "scripts", ".env.example"), "", 0o644)
-	testutil.WriteFile(t, filepath.Join(skills, "frontend", "react-patterns", ".vscode", "settings.json"), "{}", 0o644)
+	testutil.WriteFile(t, filepath.Join(skills, "frontend", "frontend-react-patterns", ".DS_Store"), "", 0o644)
+	testutil.WriteFile(t, filepath.Join(skills, "frontend", "frontend-react-patterns", "scripts", ".env.example"), "", 0o644)
+	testutil.WriteFile(t, filepath.Join(skills, "frontend", "frontend-react-patterns", ".vscode", "settings.json"), "{}", 0o644)
 	testutil.WriteFile(t, filepath.Join(skills, "frontend", ".DS_Store"), "", 0o644)
-	if err := os.Symlink("../../../../registry.yaml", filepath.Join(skills, "frontend", "react-patterns", "escape")); err != nil {
+	if err := os.Symlink("../../../../registry.yaml", filepath.Join(skills, "frontend", "frontend-react-patterns", "escape")); err != nil {
 		t.Fatal(err)
 	}
 	issues, err := Lint(dir)
@@ -79,13 +80,14 @@ func TestLintFindsProblems(t *testing.T) {
 	got := messages(issues)
 	for _, want := range []string{
 		"skills/front-end: invalid namespace",
-		`skills/frontend/wrong-name/SKILL.md: name must be "frontend-wrong-name"`,
-		"skills/frontend/no-description/SKILL.md: description is required",
-		"skills/frontend/empty: missing SKILL.md",
-		"skills/frontend/react-patterns/.DS_Store: hidden files aren't installed",
-		"skills/frontend/react-patterns/scripts/.env.example: hidden files aren't installed",
-		"skills/frontend/react-patterns/.vscode: hidden files aren't installed",
-		"skills/frontend/react-patterns/escape: links outside the skill and skills/frontend/_shared/",
+		"error: skills/frontend/unprefixed: skill folders are named frontend-<skill>, the skill's installed name; rename it to frontend-unprefixed",
+		`skills/frontend/frontend-wrong-name/SKILL.md: name must be "frontend-wrong-name"`,
+		"skills/frontend/frontend-no-description/SKILL.md: description is required",
+		"skills/frontend/frontend-empty: missing SKILL.md",
+		"skills/frontend/frontend-react-patterns/.DS_Store: hidden files aren't installed",
+		"skills/frontend/frontend-react-patterns/scripts/.env.example: hidden files aren't installed",
+		"skills/frontend/frontend-react-patterns/.vscode: hidden files aren't installed",
+		"skills/frontend/frontend-react-patterns/escape: links outside the skill and skills/frontend/_shared/",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing issue %q in:\n%s", want, got)
@@ -118,8 +120,8 @@ func TestLintShared(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	link("react-patterns/references/tokens.md", "../../_shared/references/tokens.md")
-	link("tables/scripts", "../_shared/scripts")
+	link("frontend-react-patterns/references/tokens.md", "../../_shared/references/tokens.md")
+	link("frontend-tables/scripts", "../_shared/scripts")
 	issues, err := Lint(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -132,17 +134,17 @@ func TestLintShared(t *testing.T) {
 	}
 
 	link("_shared/alias.md", "references/tokens.md")
-	link("react-patterns/alias.md", "../_shared/alias.md")
-	link("react-patterns/missing.md", "../_shared/nope.md")
-	link("react-patterns/broken.md", "nope.md")
+	link("frontend-react-patterns/alias.md", "../_shared/alias.md")
+	link("frontend-react-patterns/missing.md", "../_shared/nope.md")
+	link("frontend-react-patterns/broken.md", "nope.md")
 	testutil.WriteFile(t, filepath.Join(ns, "_shared", ".env"), "x", 0o644)
 	issues, _ = Lint(dir)
 	got := messages(issues)
 	for _, want := range []string{
 		"skills/frontend/_shared/alias.md: links aren't allowed inside _shared",
-		"skills/frontend/react-patterns/alias.md: links to skills/frontend/_shared/alias.md, which is itself a link",
-		"skills/frontend/react-patterns/missing.md: links to skills/frontend/_shared/nope.md, which doesn't exist",
-		"skills/frontend/react-patterns/broken.md: broken link",
+		"skills/frontend/frontend-react-patterns/alias.md: links to skills/frontend/_shared/alias.md, which is itself a link",
+		"skills/frontend/frontend-react-patterns/missing.md: links to skills/frontend/_shared/nope.md, which doesn't exist",
+		"skills/frontend/frontend-react-patterns/broken.md: broken link",
 		"skills/frontend/_shared/.env: hidden files aren't installed",
 	} {
 		if !strings.Contains(got, want) {

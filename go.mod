@@ -2,6 +2,9 @@ module github.com/polarity-dev/mestiere
 
 go 1.27.3
 
+// Registries made by 1.0 put skills in skills/<ns>/<skill>, against the Agent Skills spec.
+retract [v1.0.0, v1.0.2]
+
 require (
 	github.com/charmbracelet/huh v1.0.0
 	github.com/spf13/cobra v1.10.2

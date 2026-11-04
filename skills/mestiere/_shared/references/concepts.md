@@ -5,7 +5,7 @@ before running commands you haven't used yet.
 
 ## Vocabulary
 
-- **Registry**: a git repository with `registry.yaml` and `skills/<namespace>/<skill>/SKILL.md`.
+- **Registry**: a git repository with `registry.yaml` and `skills/<namespace>/<namespace>-<skill>/SKILL.md`.
 - **Namespace**: a folder of related skills, e.g. `frontend`. Lowercase letters and digits only, no hyphens.
 - **Skill**: a folder with `SKILL.md` plus optional scripts, references and assets.
   Names use lowercase letters, digits and single hyphens.

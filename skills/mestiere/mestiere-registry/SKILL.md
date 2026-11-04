@@ -53,7 +53,7 @@ Namespace names are lowercase letters and digits only. Choose them by domain or 
 skill with a relative symlink:
 
 ```sh
-cd skills/<ns>/<skill>
+cd skills/<ns>/<ns>-<skill>
 mkdir -p scripts
 ln -s ../../_shared/scripts/check.sh scripts/check.sh   # one file
 ln -s ../_shared/references references                   # a whole folder
@@ -74,6 +74,7 @@ Common errors:
 | Error | Fix |
 |---|---|
 | `name must be "<ns>-<skill>"` | Set the frontmatter `name` to the installed name |
+| `skill folders are named <ns>-<skill>` | Rename the folder to the installed name (`git mv skills/<ns>/<skill> skills/<ns>/<ns>-<skill>`) |
 | `invalid namespace` / `invalid skill name` | Rename the folder to match the naming rules |
 | `hidden files aren't installed` | Delete the file, or rename it without the leading dot (`.env.example` → `env.example`) |
 | `links outside the skill and skills/<ns>/_shared/` | Move the target into `_shared/` and link it from there |

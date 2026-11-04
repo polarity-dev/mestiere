@@ -81,7 +81,7 @@ func NewSkill(dir string, spec naming.Spec, description string) error {
 	if _, err := os.Stat(nsDir); err != nil {
 		return fmt.Errorf("namespace %q doesn't exist; create it with `mestiere registry new-namespace %s`", spec.Namespace, spec.Namespace)
 	}
-	skillDir := filepath.Join(nsDir, spec.Skill)
+	skillDir := filepath.Join(dir, filepath.FromSlash(spec.RegistryPath()))
 	if _, err := os.Stat(skillDir); err == nil {
 		return fmt.Errorf("skill %s already exists", spec)
 	}
@@ -204,7 +204,12 @@ func (l *linter) namespace(ns string) {
 			l.add(SeverityWarning, childRel, "unexpected file; only skill directories, %s and %s/ belong in a namespace", NamespaceFile, naming.SharedDir)
 		case e.Name() == naming.SharedDir:
 		default:
-			l.skill(naming.Spec{Namespace: ns, Skill: e.Name()})
+			skill, ok := strings.CutPrefix(e.Name(), ns+"-")
+			if !ok {
+				l.add(SeverityError, childRel, "skill folders are named %s-<skill>, the skill's installed name; rename it to %s-%s", ns, ns, e.Name())
+				continue
+			}
+			l.skill(naming.Spec{Namespace: ns, Skill: skill})
 		}
 	}
 	l.shared(ns)
@@ -267,7 +272,7 @@ func (l *linter) skill(spec naming.Spec) {
 		l.add(SeverityError, path.Join(rel, "SKILL.md"), "%v", err)
 	} else {
 		if fm.Name != spec.InstalledName() {
-			l.add(SeverityError, path.Join(rel, "SKILL.md"), "name must be %q (installed folder name), got %q", spec.InstalledName(), fm.Name)
+			l.add(SeverityError, path.Join(rel, "SKILL.md"), "name must be %q (the folder name), got %q", spec.InstalledName(), fm.Name)
 		}
 		switch d := strings.TrimSpace(fm.Description); {
 		case d == "":

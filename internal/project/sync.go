@@ -199,11 +199,11 @@ func (s *syncer) install(m managed, dir string) error {
 				registry.Short(m.entry.Commit), m.reg.Name, m.name)
 		}
 	}
-	spec, ok := naming.ParsePath(m.entry.Path)
-	if !ok || spec.InstalledName() != m.name {
+	spec, ok := lockedSpec(m.name, m.entry)
+	if !ok {
 		return fmt.Errorf("lock entry path %q doesn't match %s", m.entry.Path, m.name)
 	}
-	content, err := mirror.Materialize(m.entry.Commit, spec)
+	content, err := mirror.MaterializeAt(m.entry.Commit, spec, m.entry.Path)
 	if err != nil {
 		return err
 	}
@@ -438,7 +438,7 @@ func (s *syncer) classify(dir string, m managed) contentState {
 	if h == m.entry.Tree {
 		return stateCurrent
 	}
-	spec, ok := naming.ParsePath(m.entry.Path)
+	spec, ok := lockedSpec(m.name, m.entry)
 	if !ok {
 		return stateForeign
 	}

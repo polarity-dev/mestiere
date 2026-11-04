@@ -29,10 +29,10 @@ func sharedRegistry(t *testing.T) *testutil.Registry {
 	testutil.WriteFile(t, filepath.Join(reg.Dir, "skills/frontend/_shared/scripts/lint.sh"), "#!/bin/sh\necho lint\n", 0o755)
 	reg.Write("skills/frontend/_shared/scripts/lib/util.sh", "util")
 	reg.Skill("frontend", "forms", "forms")
-	reg.Link("skills/frontend/forms/references/tokens.md", "../../_shared/references/tokens.md")
-	reg.Link("skills/frontend/forms/alias.md", "SKILL.md")
+	reg.Link("skills/frontend/frontend-forms/references/tokens.md", "../../_shared/references/tokens.md")
+	reg.Link("skills/frontend/frontend-forms/alias.md", "SKILL.md")
 	reg.Skill("frontend", "tables", "tables")
-	reg.Link("skills/frontend/tables/scripts", "../_shared/scripts")
+	reg.Link("skills/frontend/frontend-tables/scripts", "../_shared/scripts")
 	reg.Skill("frontend", "plain", "plain")
 	return reg
 }
@@ -91,7 +91,7 @@ func TestMaterializeSharedFile(t *testing.T) {
 	if got, _ := fsx.TreeHash(dest, fsx.SHA1); got != c.Tree {
 		t.Fatalf("installed hash %s != content tree %s", got, c.Tree)
 	}
-	if c.Tree == reg.Tree("skills/frontend/forms") {
+	if c.Tree == reg.Tree("skills/frontend/frontend-forms") {
 		t.Fatal("materialized tree should differ from the skill's own tree")
 	}
 }
@@ -115,8 +115,8 @@ func TestMaterializeSharedDirectory(t *testing.T) {
 
 func TestMaterializeSkipsReadme(t *testing.T) {
 	reg := sharedRegistry(t)
-	reg.Write("skills/frontend/plain/Readme.md", "for people")
-	reg.Write("skills/frontend/plain/docs/README.md", "nested, installed")
+	reg.Write("skills/frontend/frontend-plain/Readme.md", "for people")
+	reg.Write("skills/frontend/frontend-plain/docs/README.md", "nested, installed")
 	reg.Commit("readme")
 	m := openMirror(t, reg)
 	dest, c := install(t, m, plain)
@@ -130,7 +130,7 @@ func TestMaterializeSkipsReadme(t *testing.T) {
 	if got, _ := fsx.TreeHash(dest, fsx.SHA1); got != c.Tree {
 		t.Fatalf("installed hash %s != content tree %s", got, c.Tree)
 	}
-	if c.Legacy == nil || c.Legacy.Tree != reg.Tree("skills/frontend/plain") {
+	if c.Legacy == nil || c.Legacy.Tree != reg.Tree("skills/frontend/frontend-plain") {
 		t.Fatalf("legacy = %+v, want the registry tree", c.Legacy)
 	}
 	trees, err := m.HistoricalTrees(plain)
@@ -144,7 +144,7 @@ func TestMaterializeWithoutLinksKeepsGitTree(t *testing.T) {
 	reg.Commit("shared")
 	m := openMirror(t, reg)
 	c, err := m.Materialize(head(t, m), plain)
-	if err != nil || c.Tree != reg.Tree("skills/frontend/plain") {
+	if err != nil || c.Tree != reg.Tree("skills/frontend/frontend-plain") {
 		t.Fatalf("Materialize = %+v, %v", c, err)
 	}
 }
@@ -152,17 +152,17 @@ func TestMaterializeWithoutLinksKeepsGitTree(t *testing.T) {
 func TestMaterializeRejectsInvalidLinks(t *testing.T) {
 	cases := map[string]func(reg *testutil.Registry){
 		"outside namespace": func(reg *testutil.Registry) {
-			reg.Link("skills/frontend/plain/x.md", "../../backend/_shared/x.md")
+			reg.Link("skills/frontend/frontend-plain/x.md", "../../backend/_shared/x.md")
 		},
 		"other skill": func(reg *testutil.Registry) {
-			reg.Link("skills/frontend/plain/x.md", "../forms/SKILL.md")
+			reg.Link("skills/frontend/frontend-plain/x.md", "../forms/SKILL.md")
 		},
 		"missing shared file": func(reg *testutil.Registry) {
-			reg.Link("skills/frontend/plain/x.md", "../_shared/nope.md")
+			reg.Link("skills/frontend/frontend-plain/x.md", "../_shared/nope.md")
 		},
 		"chained link": func(reg *testutil.Registry) {
 			reg.Link("skills/frontend/_shared/alias.md", "references/tokens.md")
-			reg.Link("skills/frontend/plain/x.md", "../_shared/alias.md")
+			reg.Link("skills/frontend/frontend-plain/x.md", "../_shared/alias.md")
 		},
 		"hidden shared file": func(reg *testutil.Registry) {
 			reg.Write("skills/frontend/_shared/scripts/.env", "x")

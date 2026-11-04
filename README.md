@@ -47,8 +47,8 @@ The agent runs `mestiere init`, shows you what the registry offers, installs the
 
 | Skill | For |
 |---|---|
-| `mestiere/project` | Repositories that install skills: adding, updating, syncing, ejecting, committing, fixing `doctor` errors |
-| `mestiere/registry` | Registry repositories: scaffolding, writing `SKILL.md`, sharing files through `_shared/`, fixing lint errors, CI |
+| `mestiere-project` | Repositories that install skills: adding, updating, syncing, ejecting, committing, fixing `doctor` errors |
+| `mestiere-registry` | Registry repositories: scaffolding, writing `SKILL.md`, sharing files through `_shared/`, fixing lint errors, CI |
 
 ## Why mestiere
 

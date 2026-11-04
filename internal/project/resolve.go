@@ -139,14 +139,26 @@ func installSpecs(reg *manifest.Registry) []naming.Spec {
 	return out
 }
 
+// lockedSpec returns the skill a lock entry installs. Locks written by mestiere
+// 1.0 record the V1Path, which is still where the locked commit keeps the
+// skill; the next update relocks them at the current path.
+func lockedSpec(name string, e manifest.LockEntry) (naming.Spec, bool) {
+	ns, skill, ok := naming.Split(name)
+	spec := naming.Spec{Namespace: ns, Skill: skill}
+	if !ok || (e.Path != spec.RegistryPath() && e.Path != spec.V1Path()) {
+		return naming.Spec{}, false
+	}
+	return spec, true
+}
+
 // prunedLock keeps the lock entries still requested by install and not excluded.
 func prunedLock(reg *manifest.Registry) map[string]manifest.LockEntry {
 	excluded := excludedSet(reg)
 	specs := installSpecs(reg)
 	out := map[string]manifest.LockEntry{}
 	for name, e := range reg.Lock {
-		skill, ok := naming.ParsePath(e.Path)
-		if !ok || skill.InstalledName() != name || excluded[name] {
+		skill, ok := lockedSpec(name, e)
+		if !ok || excluded[name] {
 			continue
 		}
 		for _, s := range specs {
@@ -191,7 +203,7 @@ func excludesIn(reg *manifest.Registry, ns string) bool {
 func entriesIn(lock map[string]manifest.LockEntry, ns string) map[string]manifest.LockEntry {
 	out := map[string]manifest.LockEntry{}
 	for name, e := range lock {
-		if skill, ok := naming.ParsePath(e.Path); ok && skill.Namespace == ns {
+		if skill, ok := lockedSpec(name, e); ok && skill.Namespace == ns {
 			out[name] = e
 		}
 	}
@@ -310,7 +322,7 @@ func (p *Project) resolveRegistry(reg *manifest.Registry, opts resolveOptions) (
 			continue
 		}
 		for name, e := range covered {
-			skill, _ := naming.ParsePath(e.Path)
+			skill, _ := lockedSpec(name, e)
 			if !opts.skillBumped(reg.Name, skill) {
 				next[name] = e
 				continue

@@ -19,7 +19,7 @@ registries:
       - backend/db-migrations
     lock:
       frontend-forms:
-        path: skills/frontend/forms
+        path: skills/frontend/frontend-forms
         commit: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
         tree: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 `
@@ -39,7 +39,7 @@ func TestLoad(t *testing.T) {
 		t.Fatal(err)
 	}
 	reg := m.Registry("polarity")
-	if reg == nil || reg.Ref != "main" || len(reg.Install) != 2 || reg.Lock["frontend-forms"].Path != "skills/frontend/forms" {
+	if reg == nil || reg.Ref != "main" || len(reg.Install) != 2 || reg.Lock["frontend-forms"].Path != "skills/frontend/frontend-forms" {
 		t.Fatalf("unexpected manifest: %+v", reg)
 	}
 	if strings.Join(m.Agents, ",") != "claude,kiro" {
@@ -55,7 +55,7 @@ func TestSavePreservesComments(t *testing.T) {
 	}
 	reg := m.Registry("polarity")
 	reg.Install = append(reg.Install, "docs")
-	reg.Lock["backend-db-migrations"] = LockEntry{Path: "skills/backend/db-migrations", Commit: "c1", Tree: "t1"}
+	reg.Lock["backend-db-migrations"] = LockEntry{Path: "skills/backend/backend-db-migrations", Commit: "c1", Tree: "t1"}
 	if err := m.Save(); err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +82,7 @@ func TestSaveNewManifest(t *testing.T) {
 	m.Registries = append(m.Registries, &Registry{
 		Name: "polarity", URL: "https://example.com/r.git",
 		Install: []string{"frontend"},
-		Lock:    map[string]LockEntry{"frontend-forms": {Path: "skills/frontend/forms", Commit: "c", Tree: "t"}},
+		Lock:    map[string]LockEntry{"frontend-forms": {Path: "skills/frontend/frontend-forms", Commit: "c", Tree: "t"}},
 	})
 	if err := m.Save(); err != nil {
 		t.Fatal(err)
@@ -113,7 +113,7 @@ func TestEmptyCollectionsGrowIntoBlockStyle(t *testing.T) {
 		func(m *Manifest) {
 			reg := m.Registry("polarity")
 			reg.Install = []string{"frontend"}
-			reg.Lock["frontend-forms"] = LockEntry{Path: "skills/frontend/forms", Commit: "c", Tree: "t"}
+			reg.Lock["frontend-forms"] = LockEntry{Path: "skills/frontend/frontend-forms", Commit: "c", Tree: "t"}
 		},
 	}
 	for _, step := range steps {

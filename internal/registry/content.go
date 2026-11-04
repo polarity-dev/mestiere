@@ -120,7 +120,13 @@ func within(p, base string) bool { return p == base || strings.HasPrefix(p, base
 
 // Materialize returns the installed form of spec at commit.
 func (m *Mirror) Materialize(commit string, spec naming.Spec) (*Content, error) {
-	skillTree, err := m.TreeAt(commit, spec.RegistryPath())
+	return m.MaterializeAt(commit, spec, spec.RegistryPath())
+}
+
+// MaterializeAt is Materialize for a skill stored at skillPath, which differs
+// from spec.RegistryPath() in commits made before mestiere 1.1.
+func (m *Mirror) MaterializeAt(commit string, spec naming.Spec, skillPath string) (*Content, error) {
+	skillTree, err := m.TreeAt(commit, skillPath)
 	if err != nil {
 		return nil, err
 	}
@@ -363,10 +369,11 @@ func (m *Mirror) HistoricalTrees(spec naming.Spec) (map[string]bool, error) {
 	if trees, ok := m.history[spec]; ok {
 		return trees, nil
 	}
-	skillPath, sharedPath := spec.RegistryPath(), naming.SharedPath(spec.Namespace)
+	// The V1Path keeps installs made by mestiere 1.0 recognizable as published.
+	skillPath, v1Path, sharedPath := spec.RegistryPath(), spec.V1Path(), naming.SharedPath(spec.Namespace)
 	// --full-history keeps commits on side branches that default history
 	// simplification would prune, since a ref may have installed from them.
-	out, err := gitx.Run(m.Dir, "rev-list", "--all", "--full-history", "--", skillPath, sharedPath)
+	out, err := gitx.Run(m.Dir, "rev-list", "--all", "--full-history", "--", skillPath, v1Path, sharedPath)
 	if err != nil {
 		return nil, err
 	}
@@ -375,7 +382,8 @@ func (m *Mirror) HistoricalTrees(spec naming.Spec) (map[string]bool, error) {
 	if len(commits) > 0 {
 		var query bytes.Buffer
 		for _, c := range commits {
-			fmt.Fprintf(&query, "%s:%s\n%s:%s\n", c, skillPath, c, sharedPath)
+			// A commit has the skill at one of the two paths, so each yields one candidate pair.
+			fmt.Fprintf(&query, "%s:%s\n%s:%s\n%s:%s\n%s:%s\n", c, skillPath, c, sharedPath, c, v1Path, c, sharedPath)
 		}
 		res, err := gitx.RunInput(m.Dir, &query, "cat-file", "--batch-check")
 		if err != nil {

@@ -21,18 +21,18 @@ my-registry/                              # registry repository
     │   ├── _shared/                      # files several skills link to
     │   │   ├── scripts/lint-a11y.sh
     │   │   └── references/design-tokens.md
-    │   ├── forms/
+    │   ├── frontend-forms/               # folder = installed name
     │   │   ├── SKILL.md                  # name: frontend-forms
     │   │   ├── README.md                 # for people browsing the registry, not installed
     │   │   ├── references/
     │   │   │   └── design-tokens.md -> ../../_shared/references/design-tokens.md
     │   │   └── scripts/
     │   │       └── lint-a11y.sh -> ../../_shared/scripts/lint-a11y.sh
-    │   └── tables/
+    │   └── frontend-tables/
     │       ├── SKILL.md
     │       └── scripts -> ../_shared/scripts
     └── backend/
-        └── db-migrations/
+        └── backend-db-migrations/
             ├── SKILL.md
             └── scripts/migrate.sh
 ```
@@ -48,6 +48,7 @@ A skill folder may hold a `README.md` next to `SKILL.md`, in any case (`readme.m
 ## What `mestiere registry lint` checks
 
 - Namespace names use lowercase letters and digits. Skill names use lowercase letters, digits and single hyphens. Installed names are 64 characters at most.
+- A skill lives in `skills/<namespace>/<namespace>-<skill>/`: the folder is the installed name, as the Agent Skills spec requires.
 - `SKILL.md` has frontmatter whose `name` equals the installed name, and a description of 1 to 1024 characters.
 - Links stay inside the skill or point into the same namespace's `_shared/`. Links into `_shared/` must reach a real file, not another link.
 - Skills and `_shared/` contain no hidden files. Hidden files are skipped when installed copies are compared with the registry, so a published hidden file could never match.
