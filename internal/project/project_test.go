@@ -394,6 +394,21 @@ func TestOldLayoutLockSyncsAndRelocks(t *testing.T) {
 	}
 }
 
+func TestAddNamespaceAfterOneOfItsSkills(t *testing.T) {
+	f := newFixture(t, "")
+	f.add("frontend/forms")
+	pinned := f.reopen().Manifest.Registry("polarity").Lock["frontend-forms"]
+	f.reg.Skill("frontend", "forms", "forms v2")
+	f.reg.Commit("forms v2")
+	f.add("frontend")
+	if !f.exists(".agents/skills/frontend-react-patterns/SKILL.md") {
+		t.Fatal("rest of the namespace not installed")
+	}
+	if got := f.reopen().Manifest.Registry("polarity").Lock["frontend-forms"]; got != pinned {
+		t.Fatalf("already locked skill moved: %+v", got)
+	}
+}
+
 func TestHyphenatedNamespace(t *testing.T) {
 	f := newFixture(t, "")
 	f.reg.Skill("ai-code", "review", "review v1")

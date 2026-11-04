@@ -72,6 +72,20 @@ func (p *Project) Add(registryName string, args []string, force bool) (*Report, 
 			}
 			reg.Install = withoutSpec(reg.Install, spec.Covers)
 			reg.Install = append(reg.Install, spec.String())
+			// Resolve counts a namespace with locked skills as done, so the
+			// skills not locked yet are targeted; locked ones keep their pin.
+			if len(entriesIn(reg.Lock, spec.Namespace)) > 0 {
+				offered(spec)
+				if catalogErr != nil {
+					return nil, catalogErr
+				}
+				for _, s := range catalog[spec.Namespace] {
+					skill := naming.Spec{Namespace: spec.Namespace, Skill: s}
+					if _, ok := reg.Lock[skill.InstalledName()]; !ok {
+						reincluded = append(reincluded, target{registry: reg.Name, spec: skill, raw: skill.String()})
+					}
+				}
+			}
 			continue
 		}
 		wasExcluded := hasSpec(reg.Exclude, spec)
