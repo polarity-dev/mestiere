@@ -28,7 +28,7 @@ flowchart LR
 
 The lock is the only state mestiere keeps. There's no hidden database or marker file to get out of sync. Before replacing or deleting a folder, mestiere checks the folder itself:
 
-1. It computes the git tree hash of the folder on disk, skipping hidden files such as `.DS_Store` and editor swap files.
+1. It computes the git tree hash of the folder on disk, skipping hidden files such as `.DS_Store` and editor swap files. A published version's hash is computed the same way, without the skill's `README.md`, which is never installed.
 2. It looks up the registry skill that matches the folder's name, and every version that skill has had in the registry's history.
 3. Only if the hash matches one of those versions is the folder an untouched install, and only then is it safe to replace or remove.
 

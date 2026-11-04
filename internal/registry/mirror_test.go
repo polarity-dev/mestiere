@@ -17,13 +17,13 @@ func TestMirror(t *testing.T) {
 	reg.Skill("frontend", "forms", "v1")
 	reg.Skill("frontend", "react-patterns", "v1")
 	reg.Skill("Bad-NS", "x", "invalid namespace is skipped")
-	reg.Write("skills/frontend/not-a-skill/README.md", "no SKILL.md")
-	testutil.WriteFile(t, filepath.Join(reg.Dir, "skills/frontend/forms/run.sh"), "#!/bin/sh\n", 0o755)
-	if err := os.Symlink("SKILL.md", filepath.Join(reg.Dir, "skills/frontend/forms/alias.md")); err != nil {
+	reg.Write("skills/frontend/frontend-not-a-skill/README.md", "no SKILL.md")
+	testutil.WriteFile(t, filepath.Join(reg.Dir, "skills/frontend/frontend-forms/run.sh"), "#!/bin/sh\n", 0o755)
+	if err := os.Symlink("SKILL.md", filepath.Join(reg.Dir, "skills/frontend/frontend-forms/alias.md")); err != nil {
 		t.Fatal(err)
 	}
 	first := reg.Commit("v1")
-	v1 := reg.Tree("skills/frontend/forms")
+	v1 := reg.Tree("skills/frontend/frontend-forms")
 
 	m, err := Open(reg.Dir)
 	if err != nil {
@@ -49,7 +49,7 @@ func TestMirror(t *testing.T) {
 	if want := map[string][]string{"frontend": {"forms", "react-patterns"}}; !reflect.DeepEqual(catalog, want) {
 		t.Fatalf("Catalog = %v, want %v", catalog, want)
 	}
-	tree, err := m.TreeAt(commit, "skills/frontend/forms")
+	tree, err := m.TreeAt(commit, "skills/frontend/frontend-forms")
 	if err != nil || tree != v1 {
 		t.Fatalf("TreeAt = %s, %v", tree, err)
 	}
@@ -79,7 +79,7 @@ func TestMirror(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(trees) != 2 || !trees[v1] || !trees[reg.Tree("skills/frontend/forms")] {
+	if len(trees) != 2 || !trees[v1] || !trees[reg.Tree("skills/frontend/frontend-forms")] {
 		t.Fatalf("HistoricalTrees = %v", trees)
 	}
 	if trees, _ := m.HistoricalTrees(naming.Spec{Namespace: "frontend", Skill: "missing"}); len(trees) != 0 {

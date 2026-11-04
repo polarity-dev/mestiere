@@ -32,7 +32,16 @@ type Content struct {
 	// skill's own tree ID when the skill links nothing from _shared.
 	Tree    string
 	Entries []fsx.Entry
+	// Legacy is the same version with its README.md, as mestiere 1.0 installed
+	// it. It's nil when the skill has no README.md. Locks and installs written
+	// by 1.0 still refer to it.
+	Legacy *Content
 }
+
+// IsReadme reports whether p is a skill's top-level README.md, in any case.
+// It documents the skill for people browsing the registry and is never
+// installed, so it doesn't reach the agent's context.
+func IsReadme(p string) bool { return strings.EqualFold(p, "README.md") }
 
 // ContentError means a skill version can't be installed as published.
 type ContentError struct {
@@ -111,7 +120,13 @@ func within(p, base string) bool { return p == base || strings.HasPrefix(p, base
 
 // Materialize returns the installed form of spec at commit.
 func (m *Mirror) Materialize(commit string, spec naming.Spec) (*Content, error) {
-	skillTree, err := m.TreeAt(commit, spec.RegistryPath())
+	return m.MaterializeAt(commit, spec, spec.RegistryPath())
+}
+
+// MaterializeAt is Materialize for a skill stored at skillPath, which differs
+// from spec.RegistryPath() in commits made before mestiere 1.1.
+func (m *Mirror) MaterializeAt(commit string, spec naming.Spec, skillPath string) (*Content, error) {
+	skillTree, err := m.TreeAt(commit, skillPath)
 	if err != nil {
 		return nil, err
 	}
@@ -207,6 +222,18 @@ func (m *Mirror) materialize(spec naming.Spec, skillTree, sharedTree string) (*C
 	c := &Content{Tree: skillTree, Entries: out}
 	if linked {
 		if c.Tree, err = fsx.HashEntries(fsx.FormatOf(skillTree), out); err != nil {
+			return nil, contentErr(spec, "%v", err)
+		}
+	}
+	var installed []fsx.Entry
+	for _, e := range out {
+		if !IsReadme(e.Path) {
+			installed = append(installed, e)
+		}
+	}
+	if len(installed) < len(out) {
+		c = &Content{Entries: installed, Legacy: c}
+		if c.Tree, err = fsx.HashEntries(fsx.FormatOf(skillTree), installed); err != nil {
 			return nil, contentErr(spec, "%v", err)
 		}
 	}
@@ -342,10 +369,11 @@ func (m *Mirror) HistoricalTrees(spec naming.Spec) (map[string]bool, error) {
 	if trees, ok := m.history[spec]; ok {
 		return trees, nil
 	}
-	skillPath, sharedPath := spec.RegistryPath(), naming.SharedPath(spec.Namespace)
+	// The V1Path keeps installs made by mestiere 1.0 recognizable as published.
+	skillPath, v1Path, sharedPath := spec.RegistryPath(), spec.V1Path(), naming.SharedPath(spec.Namespace)
 	// --full-history keeps commits on side branches that default history
 	// simplification would prune, since a ref may have installed from them.
-	out, err := gitx.Run(m.Dir, "rev-list", "--all", "--full-history", "--", skillPath, sharedPath)
+	out, err := gitx.Run(m.Dir, "rev-list", "--all", "--full-history", "--", skillPath, v1Path, sharedPath)
 	if err != nil {
 		return nil, err
 	}
@@ -354,7 +382,8 @@ func (m *Mirror) HistoricalTrees(spec naming.Spec) (map[string]bool, error) {
 	if len(commits) > 0 {
 		var query bytes.Buffer
 		for _, c := range commits {
-			fmt.Fprintf(&query, "%s:%s\n%s:%s\n", c, skillPath, c, sharedPath)
+			// A commit has the skill at one of the two paths, so each yields one candidate pair.
+			fmt.Fprintf(&query, "%s:%s\n%s:%s\n%s:%s\n%s:%s\n", c, skillPath, c, sharedPath, c, v1Path, c, sharedPath)
 		}
 		res, err := gitx.RunInput(m.Dir, &query, "cat-file", "--batch-check")
 		if err != nil {
@@ -383,6 +412,9 @@ func (m *Mirror) HistoricalTrees(spec naming.Spec) (map[string]bool, error) {
 				return nil, err
 			}
 			trees[c.Tree] = true
+			if c.Legacy != nil {
+				trees[c.Legacy.Tree] = true
+			}
 		}
 	}
 	if m.history == nil {

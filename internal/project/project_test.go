@@ -30,7 +30,7 @@ func newFixture(t *testing.T, link string) *fixture {
 	reg.Skill("frontend", "forms", "forms v1")
 	reg.Skill("frontend", "react-patterns", "react v1")
 	reg.Skill("backend", "db-migrations", "db v1")
-	testutil.WriteFile(t, filepath.Join(reg.Dir, "skills/backend/db-migrations/scripts/migrate.sh"), "#!/bin/sh\n", 0o755)
+	testutil.WriteFile(t, filepath.Join(reg.Dir, "skills/backend/backend-db-migrations/scripts/migrate.sh"), "#!/bin/sh\n", 0o755)
 	reg.Commit("initial skills")
 
 	dir := filepath.Join(t.TempDir(), "project")
@@ -231,7 +231,7 @@ func TestOutdatedAndUpdate(t *testing.T) {
 		t.Fatalf("Update changes = %v", changes)
 	}
 	lock := f.reopen().Manifest.Registry("polarity").Lock
-	if lock["frontend-forms"].Commit != head || lock["frontend-forms"].Tree != f.reg.Tree("skills/frontend/forms") {
+	if lock["frontend-forms"].Commit != head || lock["frontend-forms"].Tree != f.reg.Tree("skills/frontend/frontend-forms") {
 		t.Fatalf("lock not moved: %+v", lock["frontend-forms"])
 	}
 	if lock["frontend-react-patterns"].Tree != before["frontend-react-patterns"].Tree {
@@ -266,7 +266,7 @@ func TestUpdateTargetsOnlyNamedSkill(t *testing.T) {
 func TestUpdateFollowsNamespace(t *testing.T) {
 	f := newFixture(t, "")
 	f.add("frontend")
-	f.reg.Remove("skills/frontend/forms")
+	f.reg.Remove("skills/frontend/frontend-forms")
 	f.reg.Skill("frontend", "tables", "tables v1")
 	f.reg.Commit("reshape frontend")
 	changes, r, err := f.reopen().Update(nil, false)
@@ -292,7 +292,7 @@ func TestUpdateFollowsNamespace(t *testing.T) {
 func TestUpdateFailsWhenSingleSkillDeletedUpstream(t *testing.T) {
 	f := newFixture(t, "")
 	f.add("backend/db-migrations")
-	f.reg.Remove("skills/backend/db-migrations")
+	f.reg.Remove("skills/backend/backend-db-migrations")
 	f.reg.Commit("drop db-migrations")
 	_, _, err := f.reopen().Update(nil, false)
 	if err == nil || !strings.Contains(err.Error(), "no longer exists") {
@@ -313,7 +313,7 @@ func TestSyncUpgradesPublishedVersionFromPulledLock(t *testing.T) {
 
 	p := f.reopen()
 	p.Manifest.Registry("polarity").Lock["frontend-forms"] = manifest.LockEntry{
-		Path: "skills/frontend/forms", Commit: head, Tree: f.reg.Tree("skills/frontend/forms"),
+		Path: "skills/frontend/frontend-forms", Commit: head, Tree: f.reg.Tree("skills/frontend/frontend-forms"),
 	}
 	if err := p.Save(); err != nil {
 		t.Fatal(err)
@@ -322,6 +322,74 @@ func TestSyncUpgradesPublishedVersionFromPulledLock(t *testing.T) {
 	requireClean(t, r)
 	if !strings.Contains(f.read(".agents/skills/frontend-forms/SKILL.md"), "forms v2") {
 		t.Fatal("pulled lock not applied")
+	}
+}
+
+func TestReadmeIsNotInstalledAndOldLocksStillSync(t *testing.T) {
+	f := newFixture(t, "")
+	f.reg.Write("skills/frontend/frontend-forms/README.md", "for people")
+	head := f.reg.Commit("forms readme")
+	f.add("frontend")
+	if f.exists(".agents/skills/frontend-forms/README.md") {
+		t.Fatal("README.md installed")
+	}
+
+	// A lock written by 1.0 holds the tree with README.md; a fresh clone installs exactly that.
+	os.RemoveAll(f.path(".agents/skills/frontend-forms"))
+	p := f.reopen()
+	p.Manifest.Registry("polarity").Lock["frontend-forms"] = manifest.LockEntry{
+		Path: "skills/frontend/frontend-forms", Commit: head, Tree: f.reg.Tree("skills/frontend/frontend-forms"),
+	}
+	if err := p.Save(); err != nil {
+		t.Fatal(err)
+	}
+	requireClean(t, f.sync(SyncOptions{Frozen: true}))
+	if !f.exists(".agents/skills/frontend-forms/README.md") {
+		t.Fatal("old lock not installed as locked")
+	}
+	requireNoActions(t, f.sync(SyncOptions{Frozen: true}))
+
+	// Relocking drops README.md, and the old install counts as published.
+	if _, _, err := f.reopen().Update(nil, false); err != nil {
+		t.Fatal(err)
+	}
+	requireClean(t, f.sync(SyncOptions{}))
+	if f.exists(".agents/skills/frontend-forms/README.md") {
+		t.Fatal("README.md kept after update")
+	}
+}
+
+// Locks written by 1.0 point at skills/<ns>/<skill>: they still sync from the
+// locked commit, and update relocks them once the registry renames the folder.
+func TestOldLayoutLockSyncsAndRelocks(t *testing.T) {
+	f := newFixture(t, "")
+	f.reg.Write("skills/frontend/old/SKILL.md", "---\nname: frontend-old\ndescription: d\n---\n\nold v1\n")
+	legacy := f.reg.Commit("1.0 layout")
+	f.add("frontend")
+	p := f.reopen()
+	p.Manifest.Registry("polarity").Lock["frontend-old"] = manifest.LockEntry{
+		Path: "skills/frontend/old", Commit: legacy, Tree: f.reg.Tree("skills/frontend/old"),
+	}
+	if err := p.Save(); err != nil {
+		t.Fatal(err)
+	}
+	requireClean(t, f.sync(SyncOptions{Frozen: true}))
+	if !strings.Contains(f.read(".agents/skills/frontend-old/SKILL.md"), "old v1") {
+		t.Fatal("old lock not installed")
+	}
+
+	f.reg.Remove("skills/frontend/old")
+	f.reg.Skill("frontend", "old", "old v2")
+	f.reg.Commit("rename to current layout")
+	if _, _, err := f.reopen().Update(nil, false); err != nil {
+		t.Fatal(err)
+	}
+	requireClean(t, f.sync(SyncOptions{}))
+	if e := f.reopen().Manifest.Registry("polarity").Lock["frontend-old"]; e.Path != "skills/frontend/frontend-old" {
+		t.Fatalf("lock not moved to the current path: %+v", e)
+	}
+	if !strings.Contains(f.read(".agents/skills/frontend-old/SKILL.md"), "old v2") {
+		t.Fatal("relocked version not installed")
 	}
 }
 
@@ -393,7 +461,7 @@ func TestHiddenFilesInInstalledSkillAreIgnored(t *testing.T) {
 
 func TestRegistrySkillWithHiddenFilesIsRejected(t *testing.T) {
 	f := newFixture(t, "")
-	f.reg.Write("skills/frontend/forms/.env.example", "TOKEN=")
+	f.reg.Write("skills/frontend/frontend-forms/.env.example", "TOKEN=")
 	f.reg.Commit("add hidden file")
 	_, err := f.reopen().Add("", []string{"frontend/forms"}, false)
 	if err == nil || !strings.Contains(err.Error(), "contains hidden file .env.example") {
@@ -407,7 +475,7 @@ func TestRegistrySkillWithHiddenFilesIsRejected(t *testing.T) {
 func TestSharedFilesInstallAndUpdate(t *testing.T) {
 	f := newFixture(t, "")
 	testutil.WriteFile(t, filepath.Join(f.reg.Dir, "skills/frontend/_shared/scripts/lint.sh"), "#!/bin/sh\necho v1\n", 0o755)
-	f.reg.Link("skills/frontend/forms/scripts/lint.sh", "../../_shared/scripts/lint.sh")
+	f.reg.Link("skills/frontend/frontend-forms/scripts/lint.sh", "../../_shared/scripts/lint.sh")
 	f.reg.Commit("share lint script")
 	f.add("frontend")
 
@@ -444,7 +512,7 @@ func TestSharedFilesInstallAndUpdate(t *testing.T) {
 func TestSharedFilesPulledLockUpgrade(t *testing.T) {
 	f := newFixture(t, "")
 	f.reg.Write("skills/backend/_shared/env.md", "env v1")
-	f.reg.Link("skills/backend/db-migrations/env.md", "../_shared/env.md")
+	f.reg.Link("skills/backend/backend-db-migrations/env.md", "../_shared/env.md")
 	f.reg.Commit("share env")
 	f.add("backend")
 	f.reg.Write("skills/backend/_shared/env.md", "env v2")

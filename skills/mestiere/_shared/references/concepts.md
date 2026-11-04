@@ -5,7 +5,7 @@ before running commands you haven't used yet.
 
 ## Vocabulary
 
-- **Registry**: a git repository with `registry.yaml` and `skills/<namespace>/<skill>/SKILL.md`.
+- **Registry**: a git repository with `registry.yaml` and `skills/<namespace>/<namespace>-<skill>/SKILL.md`.
 - **Namespace**: a folder of related skills, e.g. `frontend`. Lowercase letters and digits only, no hyphens.
 - **Skill**: a folder with `SKILL.md` plus optional scripts, references and assets.
   Names use lowercase letters, digits and single hyphens.
@@ -38,6 +38,7 @@ Commands taking targets accept `frontend` (namespace), `frontend/forms` or `fron
 - It replaces or deletes a folder only when the folder's content matches a version published
   in the registry. Edited folders make `sync` stop with an error.
 - Hidden files (names starting with `.`) are ignored in installed skills and rejected in registries.
+- A skill's top-level `README.md` (any case) is for people browsing the registry and is never installed.
 
 ## Exit status
 

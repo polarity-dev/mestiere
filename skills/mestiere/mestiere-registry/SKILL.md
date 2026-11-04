@@ -18,6 +18,7 @@ skills/
     _shared/                          # optional: files several skills link to
     <skill>/
       SKILL.md                        # name: <namespace>-<skill>
+      README.md                       # optional: for people, never installed
       scripts/ references/ assets/
 ```
 
@@ -44,12 +45,15 @@ Namespace names are lowercase letters and digits only. Choose them by domain or 
 - Keep `SKILL.md` focused. Move long material into `references/` and link to it by relative path.
 - Refer to bundled files by paths relative to the skill folder, e.g. `scripts/check.sh`.
 - Mark scripts executable (`chmod +x`) and give them a shebang.
+- Put a description for people (use cases, examples) in an optional `README.md` next to
+  `SKILL.md`. It shows on the registry's web page and is never installed, so it stays out of
+  the agent's context. Don't link to it from `SKILL.md`.
 
 **Share files between skills.** Put the file in `skills/<ns>/_shared/` and link it from each
 skill with a relative symlink:
 
 ```sh
-cd skills/<ns>/<skill>
+cd skills/<ns>/<ns>-<skill>
 mkdir -p scripts
 ln -s ../../_shared/scripts/check.sh scripts/check.sh   # one file
 ln -s ../_shared/references references                   # a whole folder
@@ -70,6 +74,7 @@ Common errors:
 | Error | Fix |
 |---|---|
 | `name must be "<ns>-<skill>"` | Set the frontmatter `name` to the installed name |
+| `skill folders are named <ns>-<skill>` | Rename the folder to the installed name (`git mv skills/<ns>/<skill> skills/<ns>/<ns>-<skill>`) |
 | `invalid namespace` / `invalid skill name` | Rename the folder to match the naming rules |
 | `hidden files aren't installed` | Delete the file, or rename it without the leading dot (`.env.example` → `env.example`) |
 | `links outside the skill and skills/<ns>/_shared/` | Move the target into `_shared/` and link it from there |
