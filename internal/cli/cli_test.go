@@ -191,3 +191,16 @@ func TestGlobalAdd(t *testing.T) {
 		t.Fatal("remove -g left the link behind")
 	}
 }
+
+func TestSummary(t *testing.T) {
+	for in, want := range map[string]string{
+		"Short. Fits.":           "Short. Fits.",
+		strings.Repeat("è", 72):  strings.Repeat("è", 72),
+		strings.Repeat("a", 80):  strings.Repeat("a", 71) + "…",
+		strings.Repeat("a ", 40): strings.TrimSpace(strings.Repeat("a ", 36)) + "…",
+	} {
+		if got := summary(in, 72); got != want {
+			t.Errorf("summary(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

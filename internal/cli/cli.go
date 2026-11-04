@@ -248,7 +248,12 @@ func (a *app) registryCmd() *cobra.Command {
 				if s.Installed {
 					mark = "installed"
 				}
-				fmt.Fprintf(a.out, "  %-40s %-10s %s\n", s.Spec, mark, s.Description)
+				desc := s.Description
+				// Agents read show through a pipe and need the whole description to pick skills.
+				if a.interactive {
+					desc = summary(desc, 72)
+				}
+				fmt.Fprintf(a.out, "  %-40s %-10s %s\n", s.Spec, mark, desc)
 			}
 			return nil
 		},
@@ -673,6 +678,14 @@ func (a *app) cacheCmd() *cobra.Command {
 	}
 	cmd.AddCommand(dir, info, clean)
 	return cmd
+}
+
+// summary cuts a description to max runes.
+func summary(desc string, max int) string {
+	if r := []rune(desc); len(r) > max {
+		desc = strings.TrimSpace(string(r[:max-1])) + "…"
+	}
+	return desc
 }
 
 func splitList(s string) []string {
