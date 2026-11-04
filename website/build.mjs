@@ -38,7 +38,7 @@ const LANGS = {
 };
 const STRINGS = {
   en: {
-    skipLink: 'Skip to content', homeLabel: 'mestiere home', mainNav: 'Main', footerNav: 'Footer',
+    skipLink: 'Skip to content', menu: 'Menu', homeLabel: 'mestiere home', mainNav: 'Main', footerNav: 'Footer',
     nav: { install: 'Install', docs: 'Docs', commands: 'Commands' },
     footer: { install: 'Install', start: 'Getting started', commands: 'Command reference', registries: 'Registries', releases: 'Releases' },
     builtBy: 'built by', docs: 'Documentation', docsMenu: 'Documentation menu', toc: 'On this page',
@@ -47,7 +47,7 @@ const STRINGS = {
     loomTitle: 'One skills registry feeding every repository of a team', crumbDocs: 'Docs',
   },
   it: {
-    skipLink: 'Vai al contenuto', homeLabel: 'Home di mestiere', mainNav: 'Principale', footerNav: 'Piè di pagina',
+    skipLink: 'Vai al contenuto', menu: 'Menu', homeLabel: 'Home di mestiere', mainNav: 'Principale', footerNav: 'Piè di pagina',
     nav: { install: 'Installa', docs: 'Docs', commands: 'Comandi' }, // short: they share one row with the switch on phones
     footer: { install: 'Installazione', start: 'Primi passi', commands: 'Riferimento comandi', registries: 'Registry', releases: 'Release' },
     builtBy: 'fatto da', docs: 'Documentazione', docsMenu: 'Menu della documentazione', toc: 'In questa pagina',
@@ -397,6 +397,7 @@ function renderPage({ page, body, graph, robots = 'index, follow, max-snippet:-1
     ogLocaleAlternate: LANGS[otherLang(page.lang)].locale,
     ogImageAlt: t.ogImageAlt,
     skipLink: t.skipLink,
+    menuLabel: t.menu,
     homeHref: '/',
     homeLabel: t.homeLabel,
     mainNavLabel: t.mainNav,

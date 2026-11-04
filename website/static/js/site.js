@@ -192,6 +192,26 @@ function initAccordions(root) {
   });
 }
 
+// Phone menu: the button opens the panel with the links and GitHub; any link, Escape or a tap
+// outside closes it.
+const header = document.querySelector('.site-header');
+const toggle = header?.querySelector('.nav-toggle');
+function setMenu(open) {
+  if (!toggle) return;
+  header.classList.toggle('nav-open', open);
+  toggle.setAttribute('aria-expanded', String(open));
+}
+if (toggle) {
+  toggle.addEventListener('click', () => setMenu(!header.classList.contains('nav-open')));
+  header.addEventListener('click', (event) => { if (event.target.closest('.nav-panel a')) setMenu(false); });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && header.classList.contains('nav-open')) { setMenu(false); toggle.focus(); }
+  });
+  document.addEventListener('click', (event) => {
+    if (header.classList.contains('nav-open') && !header.contains(event.target)) setMenu(false);
+  });
+}
+
 function initPage(root, instant = false) {
   initAccordions(root);
   initCopyButtons(root);
@@ -245,6 +265,7 @@ function swap(next) {
   }
   document.body.className = next.body.className;
   document.querySelector('.site-header .nav').replaceWith(next.body.querySelector('.site-header .nav'));
+  setMenu(false);
   const nextSwitch = next.body.querySelector('.lang-switch');
   if (nextSwitch) document.querySelector('.lang-switch')?.replaceWith(nextSwitch);
   const main = next.body.querySelector('main');

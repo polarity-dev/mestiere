@@ -57,11 +57,17 @@
         <span class="version-tag">{{liveVersionV}}</span>
       </div>
       <nav class="nav-wrap" aria-label="{{mainNavLabel}}">
-        <ul class="nav">
-          {{nav}}
-        </ul>
+        <!-- Phones: the links and GitHub fold into this panel, opened by the menu button -->
+        <div class="nav-panel" id="nav-panel">
+          <ul class="nav">
+            {{nav}}
+          </ul>
+          <a class="nav-github" href="https://github.com/polarity-dev/mestiere">{{githubIcon}}<span>GitHub</span></a>
+        </div>
         {{langSwitch}}
-        <a class="nav-github" href="https://github.com/polarity-dev/mestiere">{{githubIcon}}<span>GitHub</span></a>
+        <button class="nav-toggle" type="button" aria-controls="nav-panel" aria-expanded="false" aria-label="{{menuLabel}}">
+          <span class="nav-toggle-bars" aria-hidden="true"></span>
+        </button>
       </nav>
     </div>
   </header>

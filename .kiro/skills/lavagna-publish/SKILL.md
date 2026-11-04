@@ -47,6 +47,7 @@ Never push the production build as is: root-relative URLs (`/css/site.css`), fol
     layout, so Giovanni doesn't want them as frames. Their files stay published because the docs
     nav inside the frame links to them;
   - note `llms-txt` (markdown, from `website/dist/llms.txt`) at x 4920, y 0.
+- After pages change height: `node lavagna-layout.mjs` (in website/) measures every page and resizes and restacks all frames and groups of the board. It is idempotent: rerun it after a network error.
 - When the llms.txt changes: `lavagna board update llms-txt --text-file dist/llms.txt --board main --yes`.
 
 ```sh

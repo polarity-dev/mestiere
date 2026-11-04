@@ -62,6 +62,8 @@ const withSuffix = (name, suffix) => name.replace(/\.html$/, `${suffix}.html`);
 const states = {
   'index.html': [
     { suffix: '-faq-open', apply: (html) => html.replaceAll('<details class="faq-item">', '<details class="faq-item" open>') },
+    // Phone menu open (only visible in the smartphone frames)
+    { suffix: '-menu-open', apply: (html) => html.replace('<header class="site-header">', '<header class="site-header nav-open">').replace('aria-expanded="false"', 'aria-expanded="true"') },
   ],
   // Docs menu of narrow screens, open (only visible in the smartphone frames)
   'docs.html': [{ suffix: '-menu-open', apply: (html) => html.replace(/(<nav class="docs-menu"[^>]*>\s*<details)>/, '$1 open>') }],
