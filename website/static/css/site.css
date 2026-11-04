@@ -101,14 +101,14 @@ h3 { font-size: 1.35rem; font-weight: 700; }
 .header-inner { display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; min-height: 4.5rem; }
 .brand-wrap { display: flex; align-items: center; gap: 0.75rem; }
 .brand { display: block; }
-/* The logo has no margin of its own: 112px is the old 136px artwork without its padding */
-.brand img { width: 112px; height: auto; }
+/* The logo has no margin of its own */
+.brand img { width: 136px; height: auto; }
 .version-tag {
   font: 500 0.72rem/1 var(--font-mono); color: var(--muted);
   border: 1px solid var(--border); border-radius: 999px; padding: 0.3rem 0.55rem;
   /* Center on the letters of the wordmark, not on its box: the mark above the i makes the box
      taller at the top, so the letters' middle sits 12% of the logo height below the box's. */
-  transform: translateY(0.18rem);
+  transform: translateY(0.22rem);
 }
 .nav-wrap { display: flex; align-items: center; gap: 1.75rem; }
 .nav { display: flex; gap: 1.75rem; list-style: none; margin: 0; padding: 0; }
@@ -139,8 +139,8 @@ h3 { font-size: 1.35rem; font-weight: 700; }
 @media (prefers-reduced-motion: reduce) { .nav a::after { transition: none; } }
 @media (max-width: 640px) {
   .header-inner { flex-wrap: wrap; gap: 0.5rem 1rem; padding-block: 0.75rem; min-height: 0; }
-  .brand img { width: 94px; }
-  .version-tag { transform: translateY(0.15rem); }
+  .brand img { width: 112px; }
+  .version-tag { transform: translateY(0.18rem); }
   .nav-wrap { width: 100%; justify-content: space-between; gap: 1rem; }
   /* The language switch moves up to the logo row, which has room; the nav row doesn't on 360px */
   .header-inner { position: relative; }
@@ -173,6 +173,12 @@ h3 { font-size: 1.35rem; font-weight: 700; }
 .hero-text { grid-area: text; }
 .hero-graphic { grid-area: graphic; align-self: start; } /* not centered: the text reflows when the font loads and would move it */
 .hero-install { grid-area: install; margin-top: 1rem; }
+/* Desktop: the buttons sit on the same row as the install command, with room between them */
+@media (min-width: 761px) {
+  .hero-install.desktop-only { display: flex; align-items: center; gap: 2.5rem; }
+  .hero-install.desktop-only > .code-block, .hero-install.desktop-only > pre { flex: 1 1 auto; min-width: 0; margin: 0; }
+  .hero-install.desktop-only > .actions { flex: none; margin: 0; flex-wrap: nowrap; }
+}
 .hero-meta { grid-area: meta; }
 .hero h1 { max-width: 14ch; }
 @media (max-width: 760px) {
@@ -413,4 +419,9 @@ th { font-weight: 600; border-bottom-color: var(--fg); }
   .docs-menu { display: block; }
   .toc ul { columns: 1; }
   .anchor { display: none; }
+}
+/* Narrow phones: the GitHub button keeps only its icon, so the nav fits on one row */
+@media (max-width: 380px) {
+  .nav-github { padding: 0.5rem; }
+  .nav-github span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
