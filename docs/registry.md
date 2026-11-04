@@ -23,6 +23,7 @@ my-registry/                              # registry repository
     │   │   └── references/design-tokens.md
     │   ├── forms/
     │   │   ├── SKILL.md                  # name: frontend-forms
+    │   │   ├── README.md                 # for people browsing the registry, not installed
     │   │   ├── references/
     │   │   │   └── design-tokens.md -> ../../_shared/references/design-tokens.md
     │   │   └── scripts/
@@ -39,6 +40,10 @@ my-registry/                              # registry repository
 ## Shared files
 
 A skill links to files in its namespace's `_shared/` folder with a relative symlink, either to a single file or to a whole folder. On install, mestiere replaces each link with a real copy of the target. Every installed skill is therefore self-contained, and its `SKILL.md` can keep using paths like `scripts/lint-a11y.sh`. When a shared file changes, only the skills that link to it are reported as updated.
+
+## Skill README
+
+A skill folder may hold a `README.md` next to `SKILL.md`, in any case (`readme.md` works too). Use it to present the skill to people: what it's for, use cases, examples. Git hosts show it when someone browses the folder. mestiere never installs it, so it doesn't reach the agent's context. Only the top-level file is skipped; a `README.md` inside a subfolder is installed like any other file.
 
 ## What `mestiere registry lint` checks
 

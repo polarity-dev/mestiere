@@ -207,6 +207,10 @@ func (s *syncer) install(m managed, dir string) error {
 	if err != nil {
 		return err
 	}
+	if content.Legacy != nil && content.Legacy.Tree == m.entry.Tree {
+		// shortcut: a 1.0 lock gets its README.md installed, until `mestiere update` relocks it.
+		content = content.Legacy
+	}
 	if content.Tree != m.entry.Tree {
 		return fmt.Errorf("%s at %s doesn't match the locked tree %s; the lock was edited or the registry rewritten (run `mestiere update %s`)",
 			m.entry.Path, registry.Short(m.entry.Commit), registry.Short(m.entry.Tree), m.name)

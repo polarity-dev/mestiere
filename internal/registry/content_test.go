@@ -113,6 +113,32 @@ func TestMaterializeSharedDirectory(t *testing.T) {
 	}
 }
 
+func TestMaterializeSkipsReadme(t *testing.T) {
+	reg := sharedRegistry(t)
+	reg.Write("skills/frontend/plain/Readme.md", "for people")
+	reg.Write("skills/frontend/plain/docs/README.md", "nested, installed")
+	reg.Commit("readme")
+	m := openMirror(t, reg)
+	dest, c := install(t, m, plain)
+
+	if _, err := os.Lstat(filepath.Join(dest, "Readme.md")); !os.IsNotExist(err) {
+		t.Fatalf("top-level README installed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dest, "docs/README.md")); err != nil {
+		t.Fatal("nested README.md should be installed")
+	}
+	if got, _ := fsx.TreeHash(dest, fsx.SHA1); got != c.Tree {
+		t.Fatalf("installed hash %s != content tree %s", got, c.Tree)
+	}
+	if c.Legacy == nil || c.Legacy.Tree != reg.Tree("skills/frontend/plain") {
+		t.Fatalf("legacy = %+v, want the registry tree", c.Legacy)
+	}
+	trees, err := m.HistoricalTrees(plain)
+	if err != nil || !trees[c.Tree] || !trees[c.Legacy.Tree] {
+		t.Fatalf("HistoricalTrees = %v, %v", trees, err)
+	}
+}
+
 func TestMaterializeWithoutLinksKeepsGitTree(t *testing.T) {
 	reg := sharedRegistry(t)
 	reg.Commit("shared")

@@ -38,6 +38,7 @@ Commands taking targets accept `frontend` (namespace), `frontend/forms` or `fron
 - It replaces or deletes a folder only when the folder's content matches a version published
   in the registry. Edited folders make `sync` stop with an error.
 - Hidden files (names starting with `.`) are ignored in installed skills and rejected in registries.
+- A skill's top-level `README.md` (any case) is for people browsing the registry and is never installed.
 
 ## Exit status
 

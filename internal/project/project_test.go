@@ -325,6 +325,40 @@ func TestSyncUpgradesPublishedVersionFromPulledLock(t *testing.T) {
 	}
 }
 
+func TestReadmeIsNotInstalledAndOldLocksStillSync(t *testing.T) {
+	f := newFixture(t, "")
+	f.reg.Write("skills/frontend/forms/README.md", "for people")
+	head := f.reg.Commit("forms readme")
+	f.add("frontend")
+	if f.exists(".agents/skills/frontend-forms/README.md") {
+		t.Fatal("README.md installed")
+	}
+
+	// A lock written by 1.0 holds the tree with README.md; a fresh clone installs exactly that.
+	os.RemoveAll(f.path(".agents/skills/frontend-forms"))
+	p := f.reopen()
+	p.Manifest.Registry("polarity").Lock["frontend-forms"] = manifest.LockEntry{
+		Path: "skills/frontend/forms", Commit: head, Tree: f.reg.Tree("skills/frontend/forms"),
+	}
+	if err := p.Save(); err != nil {
+		t.Fatal(err)
+	}
+	requireClean(t, f.sync(SyncOptions{Frozen: true}))
+	if !f.exists(".agents/skills/frontend-forms/README.md") {
+		t.Fatal("old lock not installed as locked")
+	}
+	requireNoActions(t, f.sync(SyncOptions{Frozen: true}))
+
+	// Relocking drops README.md, and the old install counts as published.
+	if _, _, err := f.reopen().Update(nil, false); err != nil {
+		t.Fatal(err)
+	}
+	requireClean(t, f.sync(SyncOptions{}))
+	if f.exists(".agents/skills/frontend-forms/README.md") {
+		t.Fatal("README.md kept after update")
+	}
+}
+
 // A teammate removed a namespace and the change arrived with a pull.
 func TestSyncRemovesSkillsDroppedFromManifest(t *testing.T) {
 	f := newFixture(t, "")

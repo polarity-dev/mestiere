@@ -32,7 +32,16 @@ type Content struct {
 	// skill's own tree ID when the skill links nothing from _shared.
 	Tree    string
 	Entries []fsx.Entry
+	// Legacy is the same version with its README.md, as mestiere 1.0 installed
+	// it. It's nil when the skill has no README.md. Locks and installs written
+	// by 1.0 still refer to it.
+	Legacy *Content
 }
+
+// IsReadme reports whether p is a skill's top-level README.md, in any case.
+// It documents the skill for people browsing the registry and is never
+// installed, so it doesn't reach the agent's context.
+func IsReadme(p string) bool { return strings.EqualFold(p, "README.md") }
 
 // ContentError means a skill version can't be installed as published.
 type ContentError struct {
@@ -210,6 +219,18 @@ func (m *Mirror) materialize(spec naming.Spec, skillTree, sharedTree string) (*C
 			return nil, contentErr(spec, "%v", err)
 		}
 	}
+	var installed []fsx.Entry
+	for _, e := range out {
+		if !IsReadme(e.Path) {
+			installed = append(installed, e)
+		}
+	}
+	if len(installed) < len(out) {
+		c = &Content{Entries: installed, Legacy: c}
+		if c.Tree, err = fsx.HashEntries(fsx.FormatOf(skillTree), installed); err != nil {
+			return nil, contentErr(spec, "%v", err)
+		}
+	}
 	if m.contents == nil {
 		m.contents = map[[2]string]*Content{}
 	}
@@ -383,6 +404,9 @@ func (m *Mirror) HistoricalTrees(spec naming.Spec) (map[string]bool, error) {
 				return nil, err
 			}
 			trees[c.Tree] = true
+			if c.Legacy != nil {
+				trees[c.Legacy.Tree] = true
+			}
 		}
 	}
 	if m.history == nil {

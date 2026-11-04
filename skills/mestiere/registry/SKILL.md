@@ -18,6 +18,7 @@ skills/
     _shared/                          # optional: files several skills link to
     <skill>/
       SKILL.md                        # name: <namespace>-<skill>
+      README.md                       # optional: for people, never installed
       scripts/ references/ assets/
 ```
 
@@ -44,6 +45,9 @@ Namespace names are lowercase letters and digits only. Choose them by domain or 
 - Keep `SKILL.md` focused. Move long material into `references/` and link to it by relative path.
 - Refer to bundled files by paths relative to the skill folder, e.g. `scripts/check.sh`.
 - Mark scripts executable (`chmod +x`) and give them a shebang.
+- Put a description for people (use cases, examples) in an optional `README.md` next to
+  `SKILL.md`. It shows on the registry's web page and is never installed, so it stays out of
+  the agent's context. Don't link to it from `SKILL.md`.
 
 **Share files between skills.** Put the file in `skills/<ns>/_shared/` and link it from each
 skill with a relative symlink:
