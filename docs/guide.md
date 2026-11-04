@@ -9,7 +9,7 @@ This guide covers everything a project that installs skills needs: the files mes
 | Registry | A git repository of skills. Each project lists the registries it uses. |
 | Namespace | A folder of related skills in a registry, such as `frontend` or `backend`. |
 | Skill | A folder with a `SKILL.md`, plus any scripts, references and assets it needs. |
-| Installed name | `<namespace>-<skill>`, e.g. `frontend-forms`. Namespaces can't contain hyphens, so the mapping always works both ways. |
+| Installed name | `<namespace>-<skill>`, e.g. `frontend-forms`. Commands also accept it. When a hyphenated name could mean more than one namespace or skill, write `ns/skill`, or `ns/` for a namespace. |
 | Agent | A harness that reads skills. Codex, Gemini CLI, Cursor and GitHub Copilot read `.agents/skills/` directly; Claude Code and Kiro read their own folder (`.claude/skills/`, `.kiro/skills/`), which mestiere links. |
 | Lock | The exact commit and content hash of each installed skill, stored in `skills.yaml`. |
 

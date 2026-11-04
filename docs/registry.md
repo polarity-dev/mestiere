@@ -47,7 +47,7 @@ A skill folder may hold a `README.md` next to `SKILL.md`, in any case (`readme.m
 
 ## What `mestiere registry lint` checks
 
-- Namespace names use lowercase letters and digits. Skill names use lowercase letters, digits and single hyphens. Installed names are 64 characters at most.
+- Namespace and skill names use lowercase letters, digits and single hyphens. No two skills may share an installed name: `ai/code-review` and `ai-code/review` both install as `ai-code-review`. Installed names are 64 characters at most.
 - A skill lives in `skills/<namespace>/<namespace>-<skill>/`: the folder is the installed name, as the Agent Skills spec requires.
 - `SKILL.md` has frontmatter whose `name` equals the installed name, and a description of 1 to 1024 characters.
 - Links stay inside the skill or point into the same namespace's `_shared/`. Links into `_shared/` must reach a real file, not another link.

@@ -1,6 +1,7 @@
 package naming
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -14,8 +15,8 @@ func TestParseSpec(t *testing.T) {
 		{in: "frontend", want: Spec{Namespace: "frontend"}},
 		{in: "frontend/", want: Spec{Namespace: "frontend"}},
 		{in: "frontend/react-patterns", want: Spec{Namespace: "frontend", Skill: "react-patterns"}},
-		{in: "frontend-react-patterns", want: Spec{Namespace: "frontend", Skill: "react-patterns"}},
-		{in: "front-end/x", wantErr: true},
+		{in: "front-end/x", want: Spec{Namespace: "front-end", Skill: "x"}},
+		{in: "frontend-forms", want: Spec{Namespace: "frontend-forms"}},
 		{in: "Frontend", wantErr: true},
 		{in: "frontend/react--patterns", wantErr: true},
 		{in: "frontend/-x", wantErr: true},
@@ -35,22 +36,41 @@ func TestParseSpec(t *testing.T) {
 	}
 }
 
-func TestInstalledNameRoundTrip(t *testing.T) {
-	spec := Spec{Namespace: "backend", Skill: "db-migrations"}
-	ns, skill, ok := Split(spec.InstalledName())
-	if !ok || ns != spec.Namespace || skill != spec.Skill {
-		t.Fatalf("Split(%q) = %q, %q, %v", spec.InstalledName(), ns, skill, ok)
+func TestCandidates(t *testing.T) {
+	tests := []struct {
+		in   string
+		want []Spec
+	}{
+		{in: "frontend", want: []Spec{{Namespace: "frontend"}}},
+		{in: "ai-tools/", want: []Spec{{Namespace: "ai-tools"}}},
+		{in: "ai-tools/review", want: []Spec{{Namespace: "ai-tools", Skill: "review"}}},
+		{in: "ai-code-review", want: []Spec{
+			{Namespace: "ai-code-review"},
+			{Namespace: "ai", Skill: "code-review"},
+			{Namespace: "ai-code", Skill: "review"},
+		}},
 	}
-	if got, ok := ParsePath(spec.RegistryPath()); !ok || got != spec {
-		t.Fatalf("ParsePath(%q) = %+v, %v", spec.RegistryPath(), got, ok)
+	for _, tt := range tests {
+		got, err := Candidates(tt.in)
+		if err != nil || !reflect.DeepEqual(got, tt.want) {
+			t.Errorf("Candidates(%q) = %+v, %v; want %+v", tt.in, got, err, tt.want)
+		}
+	}
+	if _, err := Candidates("-x"); err == nil {
+		t.Error("Candidates(-x) succeeded")
 	}
 }
 
-func TestSplitRejectsLocalNames(t *testing.T) {
-	for _, name := range []string{"myskill", "-x", "x-", "My-Skill"} {
-		if _, _, ok := Split(name); ok {
-			t.Errorf("Split(%q) succeeded", name)
-		}
+func TestParsePath(t *testing.T) {
+	spec := Spec{Namespace: "ai-code", Skill: "db-migrations"}
+	if got, ok := ParsePath(spec.RegistryPath(), false); !ok || got != spec {
+		t.Fatalf("ParsePath(%q) = %+v, %v", spec.RegistryPath(), got, ok)
+	}
+	if got, ok := ParsePath(spec.V1Path(), true); !ok || got != spec {
+		t.Fatalf("ParsePath(%q, v1) = %+v, %v", spec.V1Path(), got, ok)
+	}
+	if _, ok := ParsePath("skills/ai/forms", false); ok {
+		t.Fatal("unprefixed folder parsed as current layout")
 	}
 }
 

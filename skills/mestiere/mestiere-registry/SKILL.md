@@ -33,7 +33,7 @@ Projects use it with `mestiere registry add <name> <git-url>`, which works with 
 git credentials can clone.
 
 **Add a namespace.** `mestiere registry new-namespace <ns> --description "..." --owners team-a`.
-Namespace names are lowercase letters and digits only. Choose them by domain or team
+Namespace names use lowercase letters, digits and single hyphens. Choose them by domain or team
 (`frontend`, `payments`), since installed names become `<ns>-<skill>`.
 
 **Add a skill.** `mestiere registry new-skill <ns>/<skill> --description "..."`, then write
@@ -76,6 +76,7 @@ Common errors:
 | `name must be "<ns>-<skill>"` | Set the frontmatter `name` to the installed name |
 | `skill folders are named <ns>-<skill>` | Rename the folder to the installed name (`git mv skills/<ns>/<skill> skills/<ns>/<ns>-<skill>`) |
 | `invalid namespace` / `invalid skill name` | Rename the folder to match the naming rules |
+| `installs as <name>, like <folder>` | Two skills share an installed name; rename one of them |
 | `hidden files aren't installed` | Delete the file, or rename it without the leading dot (`.env.example` → `env.example`) |
 | `links outside the skill and skills/<ns>/_shared/` | Move the target into `_shared/` and link it from there |
 | `which is itself a link` / `links aren't allowed inside _shared` | Replace the link in `_shared/` with the real file |

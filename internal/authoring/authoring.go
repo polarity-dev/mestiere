@@ -153,6 +153,8 @@ type linter struct {
 	issues []Issue
 	// used holds the registry paths inside _shared that skills link to.
 	used map[string]bool
+	// names maps installed names to the folder that claimed them first.
+	names map[string]string
 }
 
 func (l *linter) add(sev Severity, rel, msg string, args ...any) {
@@ -209,7 +211,15 @@ func (l *linter) namespace(ns string) {
 				l.add(SeverityError, childRel, "skill folders are named %s-<skill>, the skill's installed name; rename it to %s-%s", ns, ns, e.Name())
 				continue
 			}
-			l.skill(naming.Spec{Namespace: ns, Skill: skill})
+			spec := naming.Spec{Namespace: ns, Skill: skill}
+			if other, ok := l.names[spec.InstalledName()]; ok {
+				l.add(SeverityError, childRel, "installs as %s, like %s; rename one of them", spec.InstalledName(), other)
+			}
+			if l.names == nil {
+				l.names = map[string]string{}
+			}
+			l.names[spec.InstalledName()] = childRel
+			l.skill(spec)
 		}
 	}
 	l.shared(ns)

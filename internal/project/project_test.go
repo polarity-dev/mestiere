@@ -11,6 +11,7 @@ import (
 	"github.com/polarity-dev/mestiere/internal/fsx"
 	"github.com/polarity-dev/mestiere/internal/gitignore"
 	"github.com/polarity-dev/mestiere/internal/manifest"
+	"github.com/polarity-dev/mestiere/internal/naming"
 	"github.com/polarity-dev/mestiere/internal/testutil"
 )
 
@@ -390,6 +391,51 @@ func TestOldLayoutLockSyncsAndRelocks(t *testing.T) {
 	}
 	if !strings.Contains(f.read(".agents/skills/frontend-old/SKILL.md"), "old v2") {
 		t.Fatal("relocked version not installed")
+	}
+}
+
+func TestHyphenatedNamespace(t *testing.T) {
+	f := newFixture(t, "")
+	f.reg.Skill("ai-code", "review", "review v1")
+	f.reg.Skill("ai-code", "lint", "lint v1")
+	f.reg.Commit("ai-code namespace")
+
+	f.add("ai-code-review")
+	if !strings.Contains(f.read(".agents/skills/ai-code-review/SKILL.md"), "review v1") {
+		t.Fatal("installed name didn't resolve to ai-code/review")
+	}
+	if got := f.reopen().Manifest.Registry("polarity").Install; len(got) != 1 || got[0] != "ai-code/review" {
+		t.Fatalf("install = %v", got)
+	}
+	f.add("ai-code-lint")
+	if !f.exists(".agents/skills/ai-code-lint/SKILL.md") {
+		t.Fatal("second skill not installed")
+	}
+
+	f.reg.Skill("ai-code", "review", "review v2")
+	f.reg.Commit("review v2")
+	if _, _, err := f.reopen().Update([]string{"ai-code-review"}, false); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(f.read(".agents/skills/ai-code-review/SKILL.md"), "review v2") {
+		t.Fatal("update by installed name didn't apply")
+	}
+
+	// ai/code-review would install over ai-code/review, so it is refused.
+	f.reg.Skill("ai", "code-review", "clash")
+	f.reg.Commit("clash")
+	if _, _, err := f.reopen().Update(nil, false); err == nil || !strings.Contains(err.Error(), "which install as ai-code-review") {
+		t.Fatalf("err = %v", err)
+	}
+	if _, err := f.reopen().Eject([]string{"ai-code-revie"}, false); err == nil || !strings.Contains(err.Error(), "matches no namespace or skill") {
+		t.Fatalf("eject err = %v", err)
+	}
+}
+
+func TestPickSpecAmbiguous(t *testing.T) {
+	_, err := pickSpec("ai-tools", "anywhere", func(naming.Spec) bool { return true })
+	if err == nil || !strings.Contains(err.Error(), "write it as one of: ai-tools/, ai/tools") {
+		t.Fatalf("err = %v", err)
 	}
 }
 

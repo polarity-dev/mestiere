@@ -210,7 +210,7 @@ func (m *Mirror) Catalog(commit string) (map[string][]string, error) {
 		if path.Base(p) != "SKILL.md" {
 			continue
 		}
-		spec, ok := naming.ParsePath(path.Dir(p))
+		spec, ok := naming.ParsePath(path.Dir(p), false)
 		if !ok {
 			continue
 		}

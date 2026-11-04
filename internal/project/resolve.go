@@ -48,7 +48,7 @@ func (t target) appliesTo(reg string) bool { return t.registry == "" || t.regist
 
 func (t target) wholeRegistry() bool { return t.spec.Namespace == "" }
 
-// parseTargets accepts "ns", "ns/skill", "ns-skill", "reg:ns..." and "reg:".
+// parseTargets accepts "ns", "ns/skill", an installed name, "reg:ns..." and "reg:".
 func (p *Project) parseTargets(args []string) ([]target, error) {
 	var out []target
 	for _, a := range args {
@@ -61,7 +61,7 @@ func (p *Project) parseTargets(args []string) ([]target, error) {
 			t.registry, rest = reg, after
 		}
 		if rest != "" {
-			spec, err := naming.ParseSpec(rest)
+			spec, err := p.installedSpec(t.registry, rest)
 			if err != nil {
 				return nil, err
 			}
@@ -143,12 +143,81 @@ func installSpecs(reg *manifest.Registry) []naming.Spec {
 // 1.0 record the V1Path, which is still where the locked commit keeps the
 // skill; the next update relocks them at the current path.
 func lockedSpec(name string, e manifest.LockEntry) (naming.Spec, bool) {
-	ns, skill, ok := naming.Split(name)
-	spec := naming.Spec{Namespace: ns, Skill: skill}
-	if !ok || (e.Path != spec.RegistryPath() && e.Path != spec.V1Path()) {
-		return naming.Spec{}, false
+	for _, v1 := range []bool{false, true} {
+		if spec, ok := naming.ParsePath(e.Path, v1); ok && spec.InstalledName() == name {
+			return spec, true
+		}
 	}
-	return spec, true
+	return naming.Spec{}, false
+}
+
+// installedSpec resolves a command-line argument against what is installed:
+// a namespace in install, or a skill in a lock. regName limits the search to
+// one registry when it isn't empty.
+func (p *Project) installedSpec(regName, raw string) (naming.Spec, error) {
+	return pickSpec(raw, "that is installed", func(c naming.Spec) bool {
+		for _, reg := range p.Manifest.Registries {
+			if regName != "" && reg.Name != regName {
+				continue
+			}
+			for _, s := range installSpecs(reg) {
+				if s == c || (c.IsNamespace() && s.Namespace == c.Namespace) {
+					return true
+				}
+			}
+			if e, ok := reg.Lock[c.InstalledName()]; ok && !c.IsNamespace() {
+				if s, ok := lockedSpec(c.InstalledName(), e); ok && s == c {
+					return true
+				}
+			}
+		}
+		return false
+	})
+}
+
+// sameName finds another skill in catalog with spec's installed name, such as
+// ai/code-review and ai-code/review.
+func sameName(catalog map[string][]string, spec naming.Spec) (naming.Spec, bool) {
+	cands, _ := naming.Candidates(spec.InstalledName())
+	for _, c := range cands {
+		if !c.IsNamespace() && c != spec && contains(catalog[c.Namespace], c.Skill) {
+			return c, true
+		}
+	}
+	return naming.Spec{}, false
+}
+
+// pickSpec returns the one reading of raw that exists. An argument with a
+// single reading is returned as is, so callers report a missing skill the
+// same way they always have.
+func pickSpec(raw, where string, exists func(naming.Spec) bool) (naming.Spec, error) {
+	cands, err := naming.Candidates(raw)
+	if err != nil {
+		return naming.Spec{}, err
+	}
+	if len(cands) == 1 {
+		return cands[0], nil
+	}
+	var found []string
+	var spec naming.Spec
+	for _, c := range cands {
+		if exists(c) {
+			spec = c
+			if c.IsNamespace() {
+				found = append(found, c.String()+"/")
+			} else {
+				found = append(found, c.String())
+			}
+		}
+	}
+	switch len(found) {
+	case 0:
+		return naming.Spec{}, fmt.Errorf("%q matches no namespace or skill %s", raw, where)
+	case 1:
+		return spec, nil
+	default:
+		return naming.Spec{}, fmt.Errorf("%q is ambiguous; write it as one of: %s", raw, strings.Join(found, ", "))
+	}
 }
 
 // prunedLock keeps the lock entries still requested by install and not excluded.
@@ -269,6 +338,10 @@ func (p *Project) resolveRegistry(reg *manifest.Registry, opts resolveOptions) (
 	at := func(skill naming.Spec) (manifest.LockEntry, error) {
 		if !contains(catalog[skill.Namespace], skill.Skill) {
 			return manifest.LockEntry{}, registry.ErrNotFound
+		}
+		if other, ok := sameName(catalog, skill); ok {
+			return manifest.LockEntry{}, fmt.Errorf("registry %s has both %s and %s, which install as %s; rename one (see `mestiere registry lint`)",
+				reg.Name, skill, other, skill.InstalledName())
 		}
 		content, err := m.Materialize(commit, skill)
 		var contentErr *registry.ContentError
