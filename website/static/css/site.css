@@ -173,12 +173,7 @@ h3 { font-size: 1.35rem; font-weight: 700; }
 .hero-text { grid-area: text; }
 .hero-graphic { grid-area: graphic; align-self: start; } /* not centered: the text reflows when the font loads and would move it */
 .hero-install { grid-area: install; margin-top: 1rem; }
-/* Desktop: the buttons sit on the same row as the install command, with room between them */
-@media (min-width: 761px) {
-  .hero-install.desktop-only { display: flex; align-items: center; gap: 2.5rem; }
-  .hero-install.desktop-only > .code-block, .hero-install.desktop-only > pre { flex: 1 1 auto; min-width: 0; margin: 0; }
-  .hero-install.desktop-only > .actions { flex: none; margin: 0; flex-wrap: nowrap; }
-}
+/* Desktop: the two buttons go under the install command, centered */
 .hero-meta { grid-area: meta; }
 .hero h1 { max-width: 14ch; }
 @media (max-width: 760px) {
@@ -255,7 +250,7 @@ main:focus { outline: none; }
 
 .eyebrow { font-size: 0.85rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 0 0 1rem; }
 .hero-meta { color: var(--muted); font-size: 0.92rem; margin-top: 1.25rem; }
-.hero .actions { justify-content: flex-end; }
+.hero .actions { justify-content: center; margin-top: 1.75rem; }
 .narrow { max-width: 780px; }
 
 /* Buttons */
