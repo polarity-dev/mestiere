@@ -559,10 +559,14 @@ function llmsTxt(pages) {
 
 Key facts for agents:
 
-- Install with \`brew install --cask polarity-dev/tap/mestiere\` (macOS, Linux), a release archive from ${SITE.repo}/releases, or \`go install github.com/polarity-dev/mestiere/cmd/mestiere@latest\` followed by \`mestiere add -g mestiere\`. Requires \`git\` on the PATH. Windows is not supported yet.
+- Install with \`brew install --cask polarity-dev/tap/mestiere\` (macOS, Linux; upgrade with \`brew upgrade --cask mestiere\`), the latest release archive \`${SITE.repo}/releases/latest/download/mestiere_<os>_<arch>.tar.gz\` (os darwin or linux, arch arm64 or amd64, plus \`checksums.txt\`), or \`go install github.com/polarity-dev/mestiere/cmd/mestiere@latest\`. After a release archive or go install, run \`mestiere add -g mestiere\` once. Requires \`git\` on the PATH. Windows is not supported yet.
+- Check the CLI with \`mestiere --version\`. Start with \`mestiere status\`: it lists installed, local and global skills, and in a folder without skills.yaml it says so (then set the project up).
 - mestiere's own skills (\`mestiere/project\`, \`mestiere/registry\`) are installed globally by Homebrew or \`mestiere add -g mestiere\`; they cover setting up a repository.
 - \`-g\` acts on global skills (\`~/.agents/skills/\`, manifest \`~/.config/mestiere/skills.yaml\`) instead of the project; \`init\`, \`track\` and \`untrack\` don't apply. Prefer project installs for team skills.
-- Typical project setup: \`mestiere init --agents claude,kiro\`, \`mestiere registry add <name> <git-url>\`, \`mestiere add <namespace>\` or \`mestiere add <namespace>/<skill>\`, then commit \`skills.yaml\` and \`.gitignore\`. Teammates run \`mestiere sync\`.
+- Typical project setup: \`mestiere init --agents claude,kiro\` (only the agents the team uses), \`mestiere registry add <name> <git-url>\`, \`mestiere registry show <name>\` to see what it offers and propose skills to the user, \`mestiere add <namespace>\` or \`mestiere add <namespace>/<skill>\`, then commit \`skills.yaml\` and \`.gitignore\`. Teammates run \`mestiere sync\` after cloning or pulling.
+- Updates: \`mestiere outdated\` lists skills whose content changed in the registry; \`mestiere update [targets]\` moves the lock forward; commit \`skills.yaml\` afterwards.
+- CI: \`mestiere sync --frozen\` and \`mestiere doctor --strict\` fail on an inconsistent skills.yaml, drifted skills or uncommitted local skills. \`mestiere doctor\` explains every error and its fix.
+- Own skills: write them in \`.agents/skills/\` (or an agent folder) and commit them with \`mestiere track <name>\`; installed skills are gitignored by default.
 - Always pass targets to \`mestiere add\`: without arguments it opens an interactive picker.
 - Never edit the \`lock\` section of skills.yaml or files under .agents/skills/ in place; use \`mestiere eject <name>\` to customize a skill. Do not pass \`--force\` without the user's approval: it discards local edits.
 - Installed name of skill \`<namespace>/<skill>\` is \`<namespace>-<skill>\`; namespaces contain no hyphens.
