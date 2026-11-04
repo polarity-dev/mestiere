@@ -37,8 +37,8 @@ This skill is installed globally, not per project. If a teammate's agent lacks i
 ## Tasks
 
 **Discover skills.** `mestiere registry list` shows configured registries.
-`mestiere registry show [registry]` lists every namespace and skill with its description
-and whether it's installed. Use it to pick skills that match the user's request.
+`mestiere registry show [registry]` lists every namespace with its description, then its
+skills indented under it, each marked when installed. Use it to pick skills that match the user's request.
 
 **Add skills.** `mestiere add <namespace>` installs a whole namespace and follows it on
 update. `mestiere add <namespace>/<skill>` installs one skill. Add `-r <registry>` when

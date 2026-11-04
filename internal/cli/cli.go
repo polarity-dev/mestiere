@@ -240,20 +240,25 @@ func (a *app) registryCmd() *cobra.Command {
 				return err
 			}
 			fmt.Fprintf(a.out, "%s at %s\n", l.Registry, registry.Short(l.Commit))
-			if len(l.Skills) == 0 {
+			if len(l.Namespaces) == 0 {
 				fmt.Fprintln(a.out, "  no skills")
 			}
-			for _, s := range l.Skills {
+			row := func(name string, installed bool, desc string) {
 				mark := ""
-				if s.Installed {
+				if installed {
 					mark = "installed"
 				}
-				desc := s.Description
 				// Agents read show through a pipe and need the whole description to pick skills.
 				if a.interactive {
 					desc = summary(desc, 72)
 				}
-				fmt.Fprintf(a.out, "  %-40s %-10s %s\n", s.Spec, mark, desc)
+				fmt.Fprintf(a.out, "%-42s %-10s %s\n", name, mark, desc)
+			}
+			for _, n := range l.Namespaces {
+				row(n.Name, n.Installed, n.Description)
+				for _, s := range n.Skills {
+					row("  "+s.Spec.String(), s.Installed, s.Description)
+				}
 			}
 			return nil
 		},
@@ -375,27 +380,32 @@ func (a *app) addCmd() *cobra.Command {
 }
 
 func (a *app) pick(p *project.Project, regName string) ([]string, error) {
-	catalog, err := p.Catalog(regName)
+	l, err := p.Browse(regName)
 	if err != nil {
 		return nil, err
 	}
-	var namespaces []string
-	for ns := range catalog {
-		namespaces = append(namespaces, ns)
-	}
-	sort.Strings(namespaces)
 	var options []huh.Option[string]
-	for _, ns := range namespaces {
-		options = append(options, huh.NewOption(ns+" (whole namespace)", ns))
-		for _, skill := range catalog[ns] {
-			options = append(options, huh.NewOption("  "+ns+"/"+skill, ns+"/"+skill))
+	label := func(name string, installed bool, desc string) string {
+		if installed {
+			desc = "(installed) " + desc
+		}
+		return fmt.Sprintf("%-30s %s", name, summary(desc, 72))
+	}
+	for _, n := range l.Namespaces {
+		options = append(options, huh.NewOption(label(n.Name, n.Installed, n.Description), n.Name))
+		for _, s := range n.Skills {
+			options = append(options, huh.NewOption(label("    "+s.Spec.Skill, s.Installed, s.Description), s.Spec.String()))
 		}
 	}
 	if len(options) == 0 {
 		return nil, errors.New("the registry has no skills")
 	}
 	var picked []string
-	if err := huh.NewMultiSelect[string]().Title("Select skills to install").Options(options...).Value(&picked).Run(); err != nil {
+	err = huh.NewMultiSelect[string]().
+		Title("Select skills to install from " + l.Registry).
+		Description("Pick a namespace to install all of it and follow it on update, or single skills under it.").
+		Options(options...).Value(&picked).Run()
+	if err != nil {
 		return nil, err
 	}
 	if len(picked) == 0 {

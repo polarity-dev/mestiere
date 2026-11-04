@@ -635,16 +635,22 @@ func TestAddInstalledSkillDeletedUpstreamWarns(t *testing.T) {
 
 func TestBrowse(t *testing.T) {
 	f := newFixture(t, "")
+	f.reg.Write("skills/frontend/namespace.yaml", "description: >\n  UI work\n  in React.\n")
+	f.reg.Commit("describe frontend")
 	f.add("backend")
 	l, err := f.reopen().Browse("")
 	if err != nil {
 		t.Fatal(err)
 	}
 	var got []string
-	for _, s := range l.Skills {
-		got = append(got, fmt.Sprintf("%s|%v|%s", s.Spec, s.Installed, s.Description))
+	for _, n := range l.Namespaces {
+		got = append(got, fmt.Sprintf("%s|%v|%s", n.Name, n.Installed, n.Description))
+		for _, s := range n.Skills {
+			got = append(got, fmt.Sprintf("  %s|%v|%s", s.Spec, s.Installed, s.Description))
+		}
 	}
-	want := "backend/db-migrations|true|Test skill db-migrations.,frontend/forms|false|Test skill forms.,frontend/react-patterns|false|Test skill react-patterns."
+	want := "backend|true|,  backend/db-migrations|true|Test skill db-migrations.," +
+		"frontend|false|UI work in React.,  frontend/forms|false|Test skill forms.,  frontend/react-patterns|false|Test skill react-patterns."
 	if strings.Join(got, ",") != want {
 		t.Fatalf("Browse = %v", got)
 	}
