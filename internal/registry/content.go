@@ -16,6 +16,7 @@ import (
 	"github.com/polarity-dev/mestiere/internal/gitx"
 	"github.com/polarity-dev/mestiere/internal/naming"
 	"github.com/polarity-dev/mestiere/internal/skillmd"
+	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -276,20 +277,66 @@ func expandShared(spec naming.Spec, at, rel string, shared map[string]rawEntry) 
 // Descriptions returns the SKILL.md description of each spec at commit.
 // Skills whose SKILL.md is missing or unparsable are left out.
 func (m *Mirror) Descriptions(commit string, specs []naming.Spec) (map[naming.Spec]string, error) {
+	paths := make([]string, len(specs))
+	for i, s := range specs {
+		paths[i] = s.RegistryPath() + "/SKILL.md"
+	}
+	files, err := m.readPaths(commit, paths)
+	if err != nil {
+		return nil, err
+	}
 	out := map[naming.Spec]string{}
-	if len(specs) == 0 {
+	for i, s := range specs {
+		if data, ok := files[paths[i]]; ok {
+			if fm, err := skillmd.Parse(data); err == nil {
+				out[s] = oneLine(fm.Description)
+			}
+		}
+	}
+	return out, nil
+}
+
+// NamespaceDescriptions returns the namespace.yaml description of each
+// namespace at commit. Namespaces without a readable description are left out.
+func (m *Mirror) NamespaceDescriptions(commit string, namespaces []string) (map[string]string, error) {
+	paths := make([]string, len(namespaces))
+	for i, ns := range namespaces {
+		paths[i] = naming.Spec{Namespace: ns}.RegistryPath() + "/namespace.yaml"
+	}
+	files, err := m.readPaths(commit, paths)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]string{}
+	for i, ns := range namespaces {
+		var doc struct {
+			Description string `yaml:"description"`
+		}
+		if data, ok := files[paths[i]]; ok && yaml.Unmarshal(data, &doc) == nil && doc.Description != "" {
+			out[ns] = oneLine(doc.Description)
+		}
+	}
+	return out, nil
+}
+
+func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
+
+// readPaths returns the content of each registry path at commit; missing paths are left out.
+func (m *Mirror) readPaths(commit string, paths []string) (map[string][]byte, error) {
+	out := map[string][]byte{}
+	if len(paths) == 0 {
 		return out, nil
 	}
 	var query bytes.Buffer
-	for _, s := range specs {
-		fmt.Fprintf(&query, "%s:%s/SKILL.md\n", commit, s.RegistryPath())
+	for _, p := range paths {
+		fmt.Fprintf(&query, "%s:%s\n", commit, p)
 	}
 	data, err := gitx.RunInput(m.Dir, &query, "cat-file", "--batch")
 	if err != nil {
 		return nil, err
 	}
 	r := bufio.NewReader(bytes.NewReader(data))
-	for _, s := range specs {
+	for _, p := range paths {
 		header, err := r.ReadString('\n')
 		if err != nil {
 			return nil, fmt.Errorf("reading cat-file output: %w", err)
@@ -306,9 +353,7 @@ func (m *Mirror) Descriptions(commit string, specs []naming.Spec) (map[naming.Sp
 		if _, err := io.ReadFull(r, buf); err != nil {
 			return nil, err
 		}
-		if fm, err := skillmd.Parse(buf[:size]); err == nil {
-			out[s] = strings.Join(strings.Fields(fm.Description), " ")
-		}
+		out[p] = buf[:size]
 	}
 	return out, nil
 }

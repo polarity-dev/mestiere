@@ -332,14 +332,22 @@ type Offered struct {
 	Installed   bool
 }
 
-type Listing struct {
-	Registry string
-	Commit   string
-	Skills   []Offered
+type OfferedNamespace struct {
+	Name        string
+	Description string
+	// Installed reports whether install lists the whole namespace.
+	Installed bool
+	Skills    []Offered
 }
 
-// Browse lists every skill a registry offers at its configured ref, with
-// descriptions and whether this project has it locked.
+type Listing struct {
+	Registry   string
+	Commit     string
+	Namespaces []OfferedNamespace
+}
+
+// Browse lists every namespace and skill a registry offers at its configured
+// ref, with descriptions and whether this project has them installed.
 func (p *Project) Browse(name string) (*Listing, error) {
 	reg, err := p.pickRegistry(name)
 	if err != nil {
@@ -353,21 +361,37 @@ func (p *Project) Browse(name string) (*Listing, error) {
 	if err != nil {
 		return nil, err
 	}
+	var namespaces []string
 	var specs []naming.Spec
 	for ns, skills := range catalog {
+		namespaces = append(namespaces, ns)
 		for _, s := range skills {
 			specs = append(specs, naming.Spec{Namespace: ns, Skill: s})
 		}
 	}
+	sort.Strings(namespaces)
 	sort.Slice(specs, func(i, j int) bool { return specs[i].String() < specs[j].String() })
+	nsDescriptions, err := m.NamespaceDescriptions(commit, namespaces)
+	if err != nil {
+		return nil, err
+	}
 	descriptions, err := m.Descriptions(commit, specs)
 	if err != nil {
 		return nil, err
 	}
 	l := &Listing{Registry: reg.Name, Commit: commit}
+	index := map[string]int{}
+	for i, ns := range namespaces {
+		index[ns] = i
+		l.Namespaces = append(l.Namespaces, OfferedNamespace{
+			Name: ns, Description: nsDescriptions[ns],
+			Installed: hasSpec(reg.Install, naming.Spec{Namespace: ns}),
+		})
+	}
 	for _, s := range specs {
 		_, installed := reg.Lock[s.InstalledName()]
-		l.Skills = append(l.Skills, Offered{Spec: s, Description: descriptions[s], Installed: installed})
+		n := &l.Namespaces[index[s.Namespace]]
+		n.Skills = append(n.Skills, Offered{Spec: s, Description: descriptions[s], Installed: installed})
 	}
 	return l, nil
 }

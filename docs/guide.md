@@ -86,8 +86,8 @@ This ignores every skill folder inside any hidden directory, nested packages inc
 | `registry add <name> <url> [--ref]` | Add a registry to the project |
 | `registry remove <name>` | Uninstall the registry's skills and drop it |
 | `registry list` | List the project's registries |
-| `registry show [name]` | List the namespaces and skills a registry offers; a terminal cuts each description to 72 characters, a pipe shows the whole text |
-| `add <ns \| ns/skill>... [-r registry]` | Install namespaces or skills; interactive picker without arguments. `ns/ns-skill`, the folder name, also works |
+| `registry show [name]` | List a registry's namespaces with their `namespace.yaml` description, each followed by its skills, indented; a terminal cuts each description to 72 characters, a pipe shows the whole text |
+| `add <ns \| ns/skill>... [-r registry]` | Install namespaces or skills; without arguments, a picker lists namespaces with their skills nested under them. `ns/ns-skill`, the folder name, also works |
 | `remove <ns \| ns/skill>...` | Uninstall them (one skill of an installed namespace is excluded instead) |
 | `sync [--frozen] [--force] [--dry-run]` | Make the skill folders match the lock |
 | `update [targets...]` | Move skills to the latest version of their ref |
