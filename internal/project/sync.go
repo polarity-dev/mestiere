@@ -478,18 +478,22 @@ func (s *syncer) published(reg *manifest.Registry, spec naming.Spec, dir string)
 // content must match the same registry skill, so copies under other names are
 // never treated as installs.
 func (s *syncer) publishedByName(name, dir string) contentState {
-	ns, skill, ok := naming.Split(name)
-	if !ok {
+	cands, err := naming.Candidates(name)
+	if err != nil {
 		return stateForeign
 	}
-	spec := naming.Spec{Namespace: ns, Skill: skill}
 	result := stateForeign
-	for _, reg := range s.p.Manifest.Registries {
-		switch s.published(reg, spec, dir) {
-		case statePublished:
-			return statePublished
-		case stateUnverifiable:
-			result = stateUnverifiable
+	for _, spec := range cands {
+		if spec.IsNamespace() {
+			continue
+		}
+		for _, reg := range s.p.Manifest.Registries {
+			switch s.published(reg, spec, dir) {
+			case statePublished:
+				return statePublished
+			case stateUnverifiable:
+				result = stateUnverifiable
+			}
 		}
 	}
 	return result

@@ -45,8 +45,8 @@ func TestScaffoldErrors(t *testing.T) {
 	if err := Init(dir, "", ""); err == nil {
 		t.Error("Init over an existing registry succeeded")
 	}
-	if err := NewNamespace(dir, "front-end", "", nil); err == nil {
-		t.Error("hyphenated namespace accepted")
+	if err := NewNamespace(dir, "Front_End", "", nil); err == nil {
+		t.Error("invalid namespace accepted")
 	}
 	if err := NewSkill(dir, naming.Spec{Namespace: "backend", Skill: "x"}, ""); err == nil {
 		t.Error("skill in a missing namespace accepted")
@@ -59,7 +59,7 @@ func TestScaffoldErrors(t *testing.T) {
 func TestLintFindsProblems(t *testing.T) {
 	dir := scaffold(t)
 	skills := filepath.Join(dir, "skills")
-	testutil.WriteFile(t, filepath.Join(skills, "front-end", "x", "SKILL.md"), "---\nname: x\n---\n", 0o644)
+	testutil.WriteFile(t, filepath.Join(skills, "Front_End", "x", "SKILL.md"), "---\nname: x\n---\n", 0o644)
 	testutil.WriteFile(t, filepath.Join(skills, "frontend", "frontend-wrong-name", "SKILL.md"), "---\nname: other\ndescription: d\n---\n", 0o644)
 	testutil.WriteFile(t, filepath.Join(skills, "frontend", "frontend-no-description", "SKILL.md"), "---\nname: frontend-no-description\n---\n", 0o644)
 	testutil.WriteFile(t, filepath.Join(skills, "frontend", "unprefixed", "SKILL.md"), "---\nname: frontend-unprefixed\ndescription: d\n---\n", 0o644)
@@ -79,7 +79,7 @@ func TestLintFindsProblems(t *testing.T) {
 	}
 	got := messages(issues)
 	for _, want := range []string{
-		"skills/front-end: invalid namespace",
+		"skills/Front_End: invalid namespace",
 		"error: skills/frontend/unprefixed: skill folders are named frontend-<skill>, the skill's installed name; rename it to frontend-unprefixed",
 		`skills/frontend/frontend-wrong-name/SKILL.md: name must be "frontend-wrong-name"`,
 		"skills/frontend/frontend-no-description/SKILL.md: description is required",
@@ -150,6 +150,27 @@ func TestLintShared(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing issue %q in:\n%s", want, got)
 		}
+	}
+}
+
+func TestLintHyphenatedNamespaces(t *testing.T) {
+	dir := scaffold(t)
+	for _, spec := range []naming.Spec{{Namespace: "ai", Skill: "code-review"}, {Namespace: "ai-code", Skill: "review"}} {
+		if err := NewNamespace(dir, spec.Namespace, "", nil); err != nil {
+			t.Fatal(err)
+		}
+		if err := NewSkill(dir, spec, "d"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	issues, err := Lint(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "error: skills/ai/ai-code-review: installs as ai-code-review, like skills/ai-code/ai-code-review"
+	want2 := "error: skills/ai-code/ai-code-review: installs as ai-code-review, like skills/ai/ai-code-review"
+	if got := messages(issues); len(issues) != 1 || (!strings.Contains(got, want) && !strings.Contains(got, want2)) {
+		t.Fatalf("got:\n%s", got)
 	}
 }
 

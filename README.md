@@ -86,7 +86,7 @@ go install github.com/polarity-dev/mestiere/cmd/mestiere@latest
 mestiere add -g mestiere    # give your agents mestiere's own skills
 ```
 
-**Requirements:** `git` on your `PATH`. mestiere uses your existing git setup (SSH agent, credential helpers, `gh auth`), so private registries work wherever `git clone` does. macOS and Linux are supported; Windows isn't yet.
+**Requirements:** `git` on your `PATH`. mestiere uses your existing git setup (SSH agent, credential helpers, `gh auth`), so private registries work wherever `git clone` does. macOS and Linux are supported; Windows isn't yet. mestiere checks for a newer version once a day and tells you when one exists; set `MESTIERE_NO_UPDATE_CHECK=1` to turn it off.
 
 ## Quick start
 

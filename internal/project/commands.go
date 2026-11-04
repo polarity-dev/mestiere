@@ -47,8 +47,20 @@ func (p *Project) Add(registryName string, args []string, force bool) (*Report, 
 	}
 	r := &Report{}
 	var reincluded []target
+	var catalog map[string][]string
+	var catalogErr error
+	offered := func(c naming.Spec) bool {
+		if catalog == nil && catalogErr == nil {
+			catalog, catalogErr = p.Catalog(reg.Name)
+		}
+		_, hasNS := catalog[c.Namespace]
+		return hasNS && (c.IsNamespace() || contains(catalog[c.Namespace], c.Skill))
+	}
 	for _, a := range args {
-		spec, err := naming.ParseSpec(a)
+		spec, err := pickSpec(a, "in registry "+reg.Name, offered)
+		if catalogErr != nil {
+			return nil, catalogErr
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -60,6 +72,20 @@ func (p *Project) Add(registryName string, args []string, force bool) (*Report, 
 			}
 			reg.Install = withoutSpec(reg.Install, spec.Covers)
 			reg.Install = append(reg.Install, spec.String())
+			// Resolve counts a namespace with locked skills as done, so the
+			// skills not locked yet are targeted; locked ones keep their pin.
+			if len(entriesIn(reg.Lock, spec.Namespace)) > 0 {
+				offered(spec)
+				if catalogErr != nil {
+					return nil, catalogErr
+				}
+				for _, s := range catalog[spec.Namespace] {
+					skill := naming.Spec{Namespace: spec.Namespace, Skill: s}
+					if _, ok := reg.Lock[skill.InstalledName()]; !ok {
+						reincluded = append(reincluded, target{registry: reg.Name, spec: skill, raw: skill.String()})
+					}
+				}
+			}
 			continue
 		}
 		wasExcluded := hasSpec(reg.Exclude, spec)
@@ -281,7 +307,7 @@ func (p *Project) Eject(args []string, track bool) (*Report, error) {
 	r := &Report{}
 	var names []string
 	for _, a := range args {
-		spec, err := naming.ParseSpec(a)
+		spec, err := p.installedSpec("", a)
 		if err != nil {
 			return nil, err
 		}
@@ -325,7 +351,7 @@ func (p *Project) Eject(args []string, track bool) (*Report, error) {
 }
 
 func localName(arg string) (string, error) {
-	if spec, err := naming.ParseSpec(arg); err == nil && !spec.IsNamespace() {
+	if spec, err := naming.ParseSpec(arg); err == nil && !spec.IsNamespace() && strings.Contains(arg, "/") {
 		return spec.InstalledName(), nil
 	}
 	if arg == "" || strings.ContainsAny(arg, `/\`) || strings.HasPrefix(arg, ".") {

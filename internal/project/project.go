@@ -205,7 +205,7 @@ func (p *Project) validate() error {
 				return fmt.Errorf("registry %s: exclude %q: %w", reg.Name, raw, err)
 			}
 			if spec.IsNamespace() {
-				return fmt.Errorf("registry %s: exclude %q must name a single skill", reg.Name, raw)
+				return fmt.Errorf("registry %s: exclude %q must name a single skill as <namespace>/<skill>", reg.Name, raw)
 			}
 		}
 	}

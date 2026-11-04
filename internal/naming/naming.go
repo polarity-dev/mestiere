@@ -1,8 +1,9 @@
 // Package naming maps registry namespaces and skills to installed names.
 //
-// A skill at skills/<namespace>/<skill> in a registry installs as <namespace>-<skill>.
-// Namespaces cannot contain hyphens, so the first hyphen of an installed name always
-// separates namespace from skill and the mapping is reversible.
+// A skill at skills/<namespace>/<namespace>-<skill> in a registry installs as
+// <namespace>-<skill>. Namespaces and skills may both contain hyphens, so an
+// installed name alone doesn't say where the namespace ends: code that starts
+// from one uses the lock path, or Candidates checked against what exists.
 package naming
 
 import (
@@ -21,20 +22,17 @@ const SharedDir = "_shared"
 // SharedPath returns the registry path of a namespace's shared folder.
 func SharedPath(ns string) string { return "skills/" + ns + "/" + SharedDir }
 
-var (
-	namespaceRe = regexp.MustCompile(`^[a-z0-9]+$`)
-	skillRe     = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
-)
+var nameRe = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 
 func ValidateNamespace(ns string) error {
-	if !namespaceRe.MatchString(ns) {
-		return fmt.Errorf("invalid namespace %q: use lowercase letters and digits only (no hyphens)", ns)
+	if !nameRe.MatchString(ns) {
+		return fmt.Errorf("invalid namespace %q: use lowercase letters, digits and single hyphens", ns)
 	}
 	return nil
 }
 
 func ValidateSkill(skill string) error {
-	if !skillRe.MatchString(skill) {
+	if !nameRe.MatchString(skill) {
 		return fmt.Errorf("invalid skill name %q: use lowercase letters, digits and single hyphens", skill)
 	}
 	return nil
@@ -96,22 +94,13 @@ func (s Spec) validate() error {
 	return nil
 }
 
-// ParseSpec accepts "ns", "ns/skill" or an installed name "ns-skill".
+// ParseSpec accepts the manifest forms "ns" and "ns/skill".
 func ParseSpec(raw string) (Spec, error) {
 	s := strings.TrimSuffix(strings.TrimSpace(raw), "/")
-	var spec Spec
-	switch {
-	case strings.Contains(s, "/"):
-		ns, skill, _ := strings.Cut(s, "/")
-		spec = Spec{Namespace: ns, Skill: skill}
-	case strings.Contains(s, "-"):
-		ns, skill, ok := Split(s)
-		if !ok {
-			return Spec{}, fmt.Errorf("invalid skill %q: expected <namespace>-<skill>", raw)
-		}
-		spec = Spec{Namespace: ns, Skill: skill}
-	default:
-		spec = Spec{Namespace: s}
+	ns, skill, _ := strings.Cut(s, "/")
+	spec := Spec{Namespace: ns, Skill: skill}
+	if strings.Contains(s, "/") && skill == "" {
+		return Spec{}, fmt.Errorf("invalid skill %q: expected <namespace>/<skill>", raw)
 	}
 	if err := spec.validate(); err != nil {
 		return Spec{}, err
@@ -119,25 +108,50 @@ func ParseSpec(raw string) (Spec, error) {
 	return spec, nil
 }
 
-// ParsePath maps a registry path skills/<ns>/<ns>-<skill> to its spec.
-func ParsePath(path string) (Spec, bool) {
+// Candidates lists what a command-line argument can mean. "ns/skill" and "ns/"
+// mean one thing; a name without "/" can be a namespace or, split at any
+// hyphen, the installed name of a skill. The namespace reading comes first.
+func Candidates(raw string) ([]Spec, error) {
+	s := strings.TrimSpace(raw)
+	if strings.Contains(s, "/") {
+		spec, err := ParseSpec(s)
+		if err != nil {
+			return nil, err
+		}
+		return []Spec{spec}, nil
+	}
+	var out []Spec
+	if ValidateNamespace(s) == nil {
+		out = append(out, Spec{Namespace: s})
+	}
+	for i, c := range s {
+		if c != '-' {
+			continue
+		}
+		if spec := (Spec{Namespace: s[:i], Skill: s[i+1:]}); spec.validate() == nil {
+			out = append(out, spec)
+		}
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("invalid name %q: use <namespace>, <namespace>/<skill> or an installed name", raw)
+	}
+	return out, nil
+}
+
+// ParsePath maps a registry path to its spec: skills/<ns>/<ns>-<skill>, or
+// the 1.0 skills/<ns>/<skill> when v1 is set.
+func ParsePath(path string, v1 bool) (Spec, bool) {
 	parts := strings.Split(path, "/")
 	if len(parts) != 3 || parts[0] != "skills" {
 		return Spec{}, false
 	}
 	skill, ok := strings.CutPrefix(parts[2], parts[1]+"-")
+	if v1 {
+		skill, ok = parts[2], true
+	}
 	spec := Spec{Namespace: parts[1], Skill: skill}
 	if !ok || spec.validate() != nil {
 		return Spec{}, false
 	}
 	return spec, true
-}
-
-// Split maps an installed name back to its namespace and skill.
-func Split(installed string) (ns, skill string, ok bool) {
-	ns, skill, found := strings.Cut(installed, "-")
-	if !found || ValidateNamespace(ns) != nil || ValidateSkill(skill) != nil {
-		return "", "", false
-	}
-	return ns, skill, true
 }

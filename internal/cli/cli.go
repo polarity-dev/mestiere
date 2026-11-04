@@ -74,6 +74,8 @@ func NewRootCmd(out, errOut io.Writer, interactive bool) *cobra.Command {
 
 // Execute runs the CLI and returns the process exit code.
 func Execute() int {
+	notify := startUpdateCheck(version(), os.Stderr)
+	defer notify()
 	root := NewRootCmd(os.Stdout, os.Stderr, isTerminal(os.Stdin) && isTerminal(os.Stdout))
 	if err := root.Execute(); err != nil {
 		if !errors.Is(err, ErrFailed) {

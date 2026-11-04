@@ -9,7 +9,7 @@ This guide covers everything a project that installs skills needs: the files mes
 | Registry | A git repository of skills. Each project lists the registries it uses. |
 | Namespace | A folder of related skills in a registry, such as `frontend` or `backend`. |
 | Skill | A folder with a `SKILL.md`, plus any scripts, references and assets it needs. |
-| Installed name | `<namespace>-<skill>`, e.g. `frontend-forms`. Namespaces can't contain hyphens, so the mapping always works both ways. |
+| Installed name | `<namespace>-<skill>`, e.g. `frontend-forms`. Commands also accept it. When a hyphenated name could mean more than one namespace or skill, write `ns/skill`, or `ns/` for a namespace. |
 | Agent | A harness that reads skills. Codex, Gemini CLI, Cursor and GitHub Copilot read `.agents/skills/` directly; Claude Code and Kiro read their own folder (`.claude/skills/`, `.kiro/skills/`), which mestiere links. |
 | Lock | The exact commit and content hash of each installed skill, stored in `skills.yaml`. |
 
@@ -151,5 +151,8 @@ For private registries, give the CI job git credentials that can read the regist
 |---|---|
 | `MESTIERE_CACHE_DIR` | Cache location (highest precedence) |
 | `XDG_CACHE_HOME` | Cache goes to `$XDG_CACHE_HOME/mestiere`, honored on macOS too |
+| `MESTIERE_NO_UPDATE_CHECK`, `NO_UPDATE_NOTIFIER` | Turn off the new-version notice |
 
 By default the cache is `~/Library/Caches/mestiere` on macOS and `~/.cache/mestiere` on Linux. It holds one bare mirror per registry and is safe to delete: `mestiere cache clean` removes it, and the next command re-fetches what it needs.
+
+Once a day mestiere asks GitHub for the latest release, in the background, and prints a notice on stderr when a newer version exists. The request sends no project data. It is skipped for development builds, when stderr isn't a terminal and when `CI` is set.
