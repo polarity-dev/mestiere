@@ -596,6 +596,43 @@ func TestSharedFilesPulledLockUpgrade(t *testing.T) {
 	}
 }
 
+func TestAddAcceptsFolderName(t *testing.T) {
+	f := newFixture(t, "")
+	f.add("backend/backend-db-migrations")
+	if got := f.reopen().Manifest.Registry("polarity").Install; strings.Join(got, ",") != "backend/db-migrations" {
+		t.Fatalf("install = %v", got)
+	}
+	if !f.exists(".agents/skills/backend-db-migrations/SKILL.md") {
+		t.Fatal("skill not installed")
+	}
+}
+
+func TestAddMissingSkillSuggests(t *testing.T) {
+	f := newFixture(t, "")
+	_, err := f.reopen().Add("", []string{"backend-db/migrations"}, false)
+	if err == nil || err.Error() != "registry polarity has no skill backend-db/migrations; did you mean backend/db-migrations?" {
+		t.Fatalf("err = %v", err)
+	}
+	_, err = f.reopen().Add("", []string{"backend/nope"}, false)
+	if err == nil || err.Error() != "registry polarity has no skill backend/nope" {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestAddInstalledSkillDeletedUpstreamWarns(t *testing.T) {
+	f := newFixture(t, "")
+	f.add("backend/db-migrations")
+	f.reg.Remove("skills/backend/backend-db-migrations")
+	f.reg.Commit("drop db-migrations")
+	r, err := f.reopen().Add("", []string{"backend/db-migrations"}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(fmt.Sprint(r.Warnings), "already installed") {
+		t.Fatalf("warnings = %v", r.Warnings)
+	}
+}
+
 func TestBrowse(t *testing.T) {
 	f := newFixture(t, "")
 	f.add("backend")

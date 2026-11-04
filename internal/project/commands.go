@@ -64,6 +64,16 @@ func (p *Project) Add(registryName string, args []string, force bool) (*Report, 
 		if err != nil {
 			return nil, err
 		}
+		if !spec.IsNamespace() {
+			spec, err = offeredSkill(spec, reg.Name, offered)
+			if catalogErr != nil {
+				return nil, catalogErr
+			}
+			// A locked skill deleted upstream is still installed; update reports the deletion.
+			if _, locked := reg.Lock[spec.InstalledName()]; err != nil && !locked {
+				return nil, err
+			}
+		}
 		nsSpec := naming.Spec{Namespace: spec.Namespace}
 		if spec.IsNamespace() {
 			if hasSpec(reg.Install, spec) {
@@ -117,6 +127,27 @@ func (p *Project) Add(registryName string, args []string, force bool) (*Report, 
 	sr, err := p.Sync(SyncOptions{Force: force})
 	r.Merge(sr)
 	return r, err
+}
+
+// offeredSkill checks that the registry offers spec. It also accepts
+// ns/ns-skill, the skill's folder name, and suggests the spec with the same
+// installed name when one exists. On error it returns spec unchanged.
+func offeredSkill(spec naming.Spec, registry string, offered func(naming.Spec) bool) (naming.Spec, error) {
+	if offered(spec) {
+		return spec, nil
+	}
+	if short, ok := strings.CutPrefix(spec.Skill, spec.Namespace+"-"); ok {
+		if s := (naming.Spec{Namespace: spec.Namespace, Skill: short}); offered(s) {
+			return s, nil
+		}
+	}
+	cands, _ := naming.Candidates(spec.InstalledName())
+	for _, c := range cands {
+		if !c.IsNamespace() && offered(c) {
+			return spec, fmt.Errorf("registry %s has no skill %s; did you mean %s?", registry, spec, c)
+		}
+	}
+	return spec, fmt.Errorf("registry %s has no skill %s", registry, spec)
 }
 
 // checkAddConflicts refuses to install over a directory that isn't a published
