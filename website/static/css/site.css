@@ -1,0 +1,461 @@
+/* mestiere.io — monochrome brand: black and white, Parmigiano Text for display type. */
+@font-face {
+  font-family: "Parmigiano Text";
+  src: url("/fonts/parmigiano-text-light.woff2") format("woff2");
+  font-weight: 300;
+  font-style: normal;
+  font-display: block; /* preloaded in layout.html: no swap, no flash of the fallback font */
+}
+@font-face {
+  font-family: "Parmigiano Text";
+  src: url("/fonts/parmigiano-text-bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: block; /* preloaded in layout.html: no swap, no flash of the fallback font */
+}
+@font-face {
+  font-family: "Parmigiano Text";
+  src: url("/fonts/parmigiano-text-light-italic.woff2") format("woff2");
+  font-weight: 300;
+  font-style: italic;
+  font-display: block; /* preloaded in layout.html: no swap, no flash of the fallback font */
+}
+
+:root {
+  --black: #000000;
+  --white: #FFFFFF;
+
+  --bg: var(--white);
+  --fg: var(--black);
+  --muted: #555555;
+  --surface: #F4F4F4;
+  --border: #DDDDDD;
+  --current-bg: #EAEAEA;
+  --code-bg: #2A2A2A;
+  --code-fg: var(--white);
+
+  --font-display: "Parmigiano Text", Georgia, "Times New Roman", serif;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --radius: 8px;
+  --max-width: 1080px;
+
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: var(--black);
+    --fg: var(--white);
+    --muted: #AAAAAA;
+    --surface: #111111;
+    --border: #2A2A2A;
+    --current-bg: #1C1C1C;
+    --code-bg: #1E1E1E;
+    --code-fg: var(--white);
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 17px/1.6 var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+img { max-width: 100%; height: auto; display: block; }
+
+a { color: var(--fg); text-underline-offset: 0.18em; }
+a:hover { text-decoration-thickness: 2px; }
+:focus-visible { outline: 2px solid var(--fg); outline-offset: 3px; border-radius: 4px; }
+
+code { font-family: var(--font-mono); font-size: 0.92em; }
+/* Inline code: only the mono face, no box and no side padding, so it lines up with the text
+   (a padded box left a notch at the start of a line). Long paths wrap on phones. */
+:not(pre) > code { overflow-wrap: anywhere; }
+
+h1, h2, h3 { font-family: var(--font-display); font-weight: 300; line-height: 1.15; margin: 0 0 0.6em; }
+h1 { font-size: clamp(2.2rem, 5vw, 3.6rem); letter-spacing: -0.01em; }
+h2 { font-size: clamp(1.8rem, 3.2vw, 2.5rem); }
+h3 { font-size: 1.35rem; font-weight: 700; }
+
+.container { width: min(100% - 2.5rem, var(--max-width)); margin-inline: auto; }
+
+.skip-link {
+  position: absolute; left: 1rem; top: -3rem;
+  background: var(--fg); color: var(--bg); padding: 0.5rem 1rem; border-radius: var(--radius);
+}
+.skip-link:focus { top: 1rem; }
+
+/* Header: sticky bar, serif nav like the headings, current section underlined like a pen stroke */
+.site-header {
+  position: sticky; top: 0; z-index: 10;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: saturate(1.4) blur(10px); -webkit-backdrop-filter: saturate(1.4) blur(10px);
+  border-bottom: 1px solid var(--border);
+}
+.header-inner { display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; min-height: 4.5rem; }
+.brand-wrap { display: flex; align-items: center; gap: 0.75rem; }
+.brand { display: block; }
+/* The logo has no margin of its own */
+.brand img { width: 136px; height: auto; }
+.version-tag {
+  font: 500 0.72rem/1 var(--font-mono); color: var(--muted);
+  border: 1px solid var(--border); border-radius: 999px; padding: 0.3rem 0.55rem;
+  /* Center on the letters of the wordmark, not on its box: the mark above the i makes the box
+     taller at the top, so the letters' middle sits 12% of the logo height below the box's. */
+  transform: translateY(0.22rem);
+}
+.nav-wrap { display: flex; align-items: center; gap: 1.75rem; }
+.nav { display: flex; gap: 1.75rem; list-style: none; margin: 0; padding: 0; }
+.nav a {
+  position: relative; display: inline-block; padding-block: 0.35rem;
+  font: 300 1.2rem/1 var(--font-display); text-decoration: none;
+}
+.nav a::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -0.1rem; height: 1px;
+  background: currentColor; transform: scaleX(0); transform-origin: left; transition: transform 0.2s ease;
+}
+.nav a:hover::after { transform: scaleX(1); }
+/* Current section: only the underline. No italic: a different face changes the word width and moves the nav */
+.nav a[aria-current="page"]::after { transform: scaleX(1); height: 2px; }
+/* Language switch: the other language's code, quiet next to the nav */
+.lang-switch {
+  font: 500 0.78rem/1 var(--font-mono); letter-spacing: 0.04em; text-decoration: none; color: var(--muted);
+  border: 1px solid var(--border); border-radius: 999px; padding: 0.42rem 0.6rem;
+}
+.lang-switch:hover { color: var(--fg); border-color: var(--fg); }
+.nav-github {
+  font-weight: 600; font-size: 0.92rem; text-decoration: none;
+  padding: 0.5rem 0.95rem; border-radius: 999px; background: var(--fg); color: var(--bg);
+}
+.nav-github, .button-github { display: inline-flex; align-items: center; gap: 0.45em; }
+.icon-github { width: 1.05em; height: 1.05em; flex: none; fill: currentColor; }
+.nav-github:hover { opacity: 0.85; }
+@media (prefers-reduced-motion: reduce) { .nav a::after { transition: none; } }
+.nav-panel { display: contents; }
+.nav-wrap > .nav-panel .nav-github { order: 3; } /* desktop order: links, language, GitHub */
+.nav-wrap > .lang-switch { order: 2; }
+.nav-wrap > .nav-panel .nav { order: 1; }
+.nav-toggle { display: none; }
+/* Phones: one bar (logo and version, language, menu button); links and GitHub in a panel */
+@media (max-width: 640px) {
+  .header-inner { min-height: 3.75rem; gap: 0.75rem; position: relative; }
+  .brand img { width: 112px; }
+  .version-tag { transform: translateY(0.18rem); }
+  .nav-wrap { gap: 0.6rem; }
+  .nav-toggle {
+    order: 3;
+  }
+  .nav-toggle-bars, .nav-toggle-bars::before, .nav-toggle-bars::after {
+    display: block; width: 1rem; height: 1.5px; background: currentColor; border-radius: 1px;
+    transition: transform 0.25s ease, opacity 0.2s ease;
+  }
+  .nav-toggle-bars { position: relative; }
+  .nav-toggle-bars::before, .nav-toggle-bars::after { content: ""; position: absolute; left: 0; }
+  .nav-toggle-bars::before { transform: translateY(-4px); }
+  .nav-toggle-bars::after { transform: translateY(4px); }
+  .nav-open .nav-toggle-bars { background: transparent; }
+  .nav-open .nav-toggle-bars::before { transform: rotate(45deg); }
+  .nav-open .nav-toggle-bars::after { transform: rotate(-45deg); }
+  .nav-panel {
+    display: flex; flex-direction: column; align-items: stretch; gap: 0.25rem;
+    position: absolute; top: 100%; left: -1.25rem; right: -1.25rem; padding: 0.75rem 1.25rem 1.25rem;
+    background: var(--bg); border-bottom: 1px solid var(--border);
+    opacity: 0; visibility: hidden; transform: translateY(-0.5rem);
+    transition: opacity 0.2s ease, transform 0.25s cubic-bezier(0.25, 0.8, 0.25, 1), visibility 0s linear 0.25s;
+  }
+  .nav-open .nav-panel { opacity: 1; visibility: visible; transform: none; transition-delay: 0s; }
+  .nav-panel .nav { flex-direction: column; gap: 0; }
+  .nav-panel .nav a { display: block; padding: 0.85rem 0; font-size: 1.35rem; border-bottom: 1px solid var(--border); }
+  .nav-panel .nav a::after { display: none; }
+  .nav-panel .nav a[aria-current="page"] { font-weight: 700; }
+  .nav-panel .nav-github { align-self: flex-start; margin-top: 1rem; }
+}
+@media (max-width: 640px) and (prefers-reduced-motion: reduce) {
+  .nav-panel, .nav-toggle-bars, .nav-toggle-bars::before, .nav-toggle-bars::after { transition: none; }
+}
+
+/* Desktop and phone get different content: on a phone there is no terminal to paste into */
+.mobile-only, .actions.mobile-only { display: none; }
+@media (max-width: 760px) {
+  .desktop-only, .actions.desktop-only { display: none; }
+  .mobile-only { display: block; }
+  .actions.mobile-only { display: flex; }
+  .mobile-plain { background: var(--bg); }
+}
+
+/* Hero */
+.hero { padding-block: clamp(2.5rem, 6vw, 4.5rem) clamp(2rem, 5vw, 4rem); overflow: hidden; }
+.hero-grid {
+  display: grid; align-items: center; column-gap: 3rem;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  grid-template-areas: "text graphic" "install install" "meta meta";
+}
+.hero-text { grid-area: text; }
+.hero-graphic { grid-area: graphic; align-self: start; } /* not centered: the text reflows when the font loads and would move it */
+.hero-install { grid-area: install; margin-top: 1rem; }
+/* Desktop: the two buttons go under the install command, centered */
+.hero-meta { grid-area: meta; }
+.hero h1 { max-width: 14ch; }
+@media (max-width: 760px) {
+  .hero-grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "text" "graphic" "install" "meta"; }
+  .hero-graphic { margin: 0.5rem -0.75rem 0; }
+  .hero-install { margin-top: 0; }
+  /* Phone: one full-width button per row, so no label wraps; the primary one comes last */
+  .hero-install .actions, .cta .actions.mobile-only { flex-direction: column; align-items: stretch; }
+}
+
+/* Hero graphic: a registry feeding every repository (SVG built in hero-graphic.mjs).
+   Its animation runs on its own; it never reacts to the pointer. */
+.loom {
+  display: block; width: 100%; height: auto; color: var(--fg); overflow: visible;
+  animation: loom-in 0.9s ease-out both;
+}
+@keyframes loom-in { from { opacity: 0; } }
+.loom-thread { fill: none; stroke: currentColor; stroke-width: 1; opacity: 0.22; }
+.loom-pulse { fill: currentColor; opacity: 0; }
+.loom-node { fill: currentColor; }
+.loom-ring, .loom-halo { fill: none; stroke: currentColor; stroke-width: 1; opacity: 0; }
+.loom-source { fill: var(--bg); stroke: currentColor; stroke-width: 0.75; }
+.loom-mark { fill: currentColor; opacity: 0.85; }
+.loom-label { font: 500 13px var(--font-mono); fill: currentColor; dominant-baseline: middle; }
+.loom-caption { font: italic 300 17px var(--font-display); fill: var(--muted); text-anchor: middle; }
+@media (max-width: 760px) {
+  .loom-label { font-size: 19px; }
+  .loom-caption { font-size: 22px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .loom-pulses, .loom-ring, .loom-halo { display: none; }
+}
+.lead { font-family: var(--font-display); font-weight: 300; font-size: 1.4rem; line-height: 1.45; color: var(--muted); max-width: 52ch; }
+
+/* Code blocks */
+.terminal, .doc-body pre, .faq-answer pre {
+  position: relative;
+  background: var(--code-bg); color: var(--code-fg);
+  padding: 1.1rem 1.25rem; border-radius: var(--radius);
+  overflow-x: auto; line-height: 1.55; font-size: 0.92rem;
+  border: 1px solid var(--border);
+}
+/* Scrollbar matching the dark code box, not the light page default */
+.terminal, .doc-body pre, .faq-answer pre { scrollbar-width: thin; scrollbar-color: #666 var(--code-bg); }
+.terminal::-webkit-scrollbar, .doc-body pre::-webkit-scrollbar, .faq-answer pre::-webkit-scrollbar { height: 8px; background: var(--code-bg); }
+.terminal::-webkit-scrollbar-thumb, .doc-body pre::-webkit-scrollbar-thumb, .faq-answer pre::-webkit-scrollbar-thumb { background: #666; border-radius: 999px; }
+pre.has-copy { padding-right: 3.25rem; }
+/* The copy icon sits on a wrapper, so it stays put while the code scrolls sideways.
+   One-line blocks center it vertically; longer ones keep it in the top corner. */
+.code-block { position: relative; margin: 1em 0; }
+.code-block > pre { margin: 0; }
+.copy-button {
+  position: absolute; top: 50%; right: 0.55rem; transform: translateY(-50%);
+  display: grid; place-items: center; width: 2rem; height: 2rem; padding: 0;
+  color: #AAAAAA; background: var(--code-bg); border: 0; border-radius: 6px; cursor: pointer;
+}
+.copy-button svg { width: 1.1rem; height: 1.1rem; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.copy-button:hover { color: var(--code-fg); background: rgba(255, 255, 255, 0.1); }
+.copy-button:focus-visible { outline-color: var(--code-fg); }
+.code-block.is-multiline > .copy-button { top: 0.55rem; transform: none; }
+/* Live version (site.js): invisible until GitHub answers, then it fades in. No spinner: the
+   answer is usually there in a blink. If the script never runs, the build-time value shows at 4s. */
+.live-version { display: inline-block; opacity: 0; filter: blur(3px); transform: translateY(0.2em); animation: live-version-in 0.6s ease-out 4s forwards; }
+.live-version.is-loaded { animation: live-version-in 0.6s ease-out forwards; }
+.live-version.is-instant { animation: none; opacity: 1; filter: none; transform: none; }
+/* Focus moves to <main> after an in-page navigation (site.js); no ring around the whole page */
+main:focus { outline: none; }
+@keyframes live-version-in { to { opacity: 1; filter: none; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .live-version { filter: none; transform: none; }
+  @keyframes live-version-in { to { opacity: 1; } }
+}
+.cta-note { color: var(--muted); max-width: 34ch; margin-inline: auto; }
+
+.eyebrow { font-size: 0.85rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 0 0 1rem; }
+.hero-meta { color: var(--muted); font-size: 0.92rem; margin-top: 1.25rem; }
+.hero .actions { justify-content: center; margin-top: 1.75rem; }
+.narrow { max-width: 780px; }
+
+/* Buttons */
+.actions { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 1.5rem; }
+.button {
+  /* Flex so the label stays centered when buttons in a row get different heights (one wraps) */
+  display: inline-flex; align-items: center; justify-content: center; text-align: center;
+  padding: 0.7rem 1.2rem; border-radius: 999px;
+  border: 1px solid var(--fg); color: var(--fg); text-decoration: none; font-weight: 600;
+}
+.button:hover { background: var(--surface); }
+.button-primary { background: var(--fg); color: var(--bg); }
+.button-primary:hover { background: var(--fg); opacity: 0.85; }
+
+/* Sections */
+.section { padding-block: clamp(3rem, 7vw, 5rem); }
+/* Grey text on the grey band reads washed out: body text there is full black/white */
+.section-alt { background: var(--surface); --muted: var(--fg); }
+.section-lead { font-family: var(--font-display); font-weight: 300; font-size: 1.3rem; line-height: 1.45; max-width: 52ch; margin: 0; }
+.more { margin-top: 0.5rem; }
+.more a { font-weight: 600; }
+.more a::after { content: " →"; }
+/* External links in running text get an outbound arrow */
+main p a[href^="http"]:not([href^="https://mestiere.io"]):not(.button)::after,
+main li a[href^="http"]:not([href^="https://mestiere.io"])::after,
+main td a[href^="http"]:not([href^="https://mestiere.io"])::after { content: "\2009↗"; font-size: 0.85em; text-decoration: none; display: inline-block; }
+/* External buttons: the arrow is a flex item next to the label, centered with it */
+.button[href^="http"]:not(.button-github)::after { content: "↗"; margin-left: 0.4em; font-size: 0.9em; }
+.note { color: var(--muted); font-size: 0.95rem; }
+
+.features {
+  list-style: none; margin: 2rem 0 0; padding: 0;
+  display: grid; gap: 1.5rem; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+.features li { padding: 1.25rem; border: 1px solid var(--border); border-radius: var(--radius); }
+.features p { margin: 0; color: var(--muted); }
+
+.columns { display: grid; gap: 2rem; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+
+/* Footer */
+.site-footer { border-top: 1px solid var(--border); padding-block: 2rem; color: var(--muted); font-size: 0.95rem; }
+.footer-inner { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+.footer-inner p { margin: 0; }
+
+/* 404: one file, two languages (see render404 in build.mjs); only one is ever shown */
+.page-it, .is-it .page-en { display: none; }
+.is-it .page-it { display: block; }
+.not-found {
+  min-height: 70vh; display: grid; align-items: center; gap: 3rem;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); padding-block: 3rem;
+}
+.not-found h1 { max-width: 14ch; }
+.not-found .lead { max-width: 34ch; }
+.not-found .actions { justify-content: flex-start; }
+.loom-thread-loose { opacity: 0.35; }
+.loom-missing { fill: none; stroke: currentColor; stroke-width: 1; stroke-dasharray: 2 3; opacity: 0.7; }
+.loom-label-missing { opacity: 0.5; }
+@media (max-width: 760px) {
+  .not-found { grid-template-columns: minmax(0, 1fr); gap: 1rem; padding-block: 1.5rem 3rem; min-height: 0; }
+  .not-found-graphic { order: -1; margin-inline: -0.75rem; }
+  .not-found .actions { flex-direction: column; align-items: stretch; }
+}
+@media (prefers-reduced-motion: reduce) { .loom-404 .loom-pulse { display: none; } }
+
+/* Home: steps, FAQ, CTA */
+.steps { list-style: none; margin: 2rem 0 0; padding: 0; counter-reset: step;
+  display: grid; gap: 1.5rem; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.steps li { counter-increment: step; }
+.steps li::before { content: counter(step); display: inline-grid; place-items: center;
+  width: 2rem; height: 2rem; border: 1px solid var(--fg); border-radius: 50%;
+  font-family: var(--font-display); margin-bottom: 0.75rem; }
+.steps p { margin: 0; color: var(--muted); }
+
+.faq { border-top: 1px solid var(--border); }
+.faq-item { border-bottom: 1px solid var(--border); }
+.faq-item summary { cursor: pointer; list-style: none; padding: 1.1rem 2rem 1.1rem 0; position: relative; }
+.faq-item summary::-webkit-details-marker { display: none; }
+/* Plus that turns into a minus: two thin bars, the vertical one rotates flat when open.
+   .is-closing (site.js) flips it back as soon as the closing animation starts. */
+.faq-item summary::before, .faq-item summary::after {
+  content: ""; position: absolute; right: 0.3rem; top: 50%; width: 0.85rem; height: 1.5px;
+  background: currentColor; transition: transform 0.32s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+.faq-item summary::before { transform: translateY(-50%) rotate(90deg); }
+.faq-item summary::after { transform: translateY(-50%); }
+.faq-item[open]:not(.is-closing) summary::before { transform: translateY(-50%) rotate(0deg); }
+.faq-item summary h3 { display: inline; margin: 0; font-size: 1.25rem; }
+.faq-answer { padding-bottom: 1.1rem; color: var(--muted); }
+.faq-answer p:first-child { margin-top: 0; }
+
+.cta { text-align: center; }
+.cta .actions { justify-content: center; }
+
+/* Docs */
+.docs-layout { display: grid; gap: 3rem; grid-template-columns: 220px minmax(0, 1fr); padding-block: 3rem 4rem; }
+.docs-nav { position: sticky; top: 6rem; align-self: start; font-size: 0.95rem; }
+.docs-nav-title, .toc-title { font-size: 0.78rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 0 0 0.75rem; }
+.docs-nav ul, .toc ul { list-style: none; margin: 0; padding: 0; }
+.docs-nav li { margin: 0.15rem 0; }
+.docs-nav a { display: block; padding: 0.35rem 0.75rem; border-radius: 6px; text-decoration: none; }
+.docs-nav a:hover { background: var(--surface); }
+/* Current page: a soft grey fill with the same thin border on every side (not solid black,
+   which pulled the eye away from the page) */
+.docs-nav a, .docs-menu a { border: 1px solid transparent; }
+.docs-nav a[aria-current="page"], .docs-menu a[aria-current="page"] { background: var(--current-bg); border-color: var(--border); font-weight: 600; }
+
+.doc { max-width: 760px; min-width: 0; }
+.doc-header h1 { margin-bottom: 0.4em; }
+.doc-lead { font-family: var(--font-display); font-weight: 300; font-size: 1.3rem; line-height: 1.45; color: var(--muted); margin-top: 0; }
+
+.toc { border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.25rem; margin: 2rem 0; font-size: 0.95rem; }
+.toc ul { columns: 2; column-gap: 2rem; }
+.toc li { break-inside: avoid; padding: 0.15rem 0; }
+
+.doc-body h2 { margin-top: 2.5rem; padding-top: 0.5rem; }
+.doc-body h3 { margin-top: 2rem; font-size: 1.3rem; }
+.doc-body h2, .doc-body h3 { position: relative; scroll-margin-top: 5.5rem; }
+.anchor { position: absolute; left: -1.1em; text-decoration: none; color: var(--muted); opacity: 0; font-family: var(--font-sans); font-weight: 400; }
+h2:hover > .anchor, h3:hover > .anchor, .anchor:focus { opacity: 1; }
+.doc-body li { margin: 0.3rem 0; }
+.doc-body blockquote { margin: 1.5rem 0; padding: 0.25rem 1.25rem; border-left: 3px solid var(--fg); color: var(--muted); }
+
+.table-wrap { overflow-x: auto; margin: 1.5rem 0; }
+table { border-collapse: collapse; width: 100%; font-size: 0.95rem; }
+th, td { text-align: left; padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { font-weight: 600; border-bottom-color: var(--fg); }
+
+/* Docs menu on narrow screens: a bar naming the current page that opens the full list */
+.docs-menu { display: none; }
+.docs-menu details { border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); }
+.docs-menu summary {
+  list-style: none; cursor: pointer; position: relative;
+  display: flex; flex-direction: column; gap: 0.15rem; padding: 0.75rem 3rem 0.75rem 1rem;
+}
+.docs-menu summary::-webkit-details-marker { display: none; }
+.docs-menu summary::after {
+  content: ""; position: absolute; right: 1.1rem; top: 50%; width: 0.55rem; height: 0.55rem;
+  border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+  transform: translateY(-70%) rotate(45deg); transition: transform 0.2s ease;
+}
+.docs-menu details[open]:not(.is-closing) summary::after { transform: translateY(-30%) rotate(-135deg); }
+.docs-menu details[open] summary { border-bottom: 1px solid var(--border); }
+.docs-menu-label { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.docs-menu-current { font: 300 1.25rem/1.2 var(--font-display); }
+.docs-menu ul { list-style: none; margin: 0; padding: 0.4rem; }
+.docs-menu a { display: block; padding: 0.65rem 0.75rem; border-radius: 6px; text-decoration: none; }
+@media (prefers-reduced-motion: reduce) { .docs-menu summary::after, .faq-item summary::before { transition: none; } }
+
+.pager { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 3.5rem; }
+.pager a { display: block; padding: 1rem 1.25rem; border: 1px solid var(--border); border-radius: var(--radius); text-decoration: none; font-weight: 600; }
+.pager a:hover { border-color: var(--fg); }
+.pager span { display: block; font-size: 0.8rem; font-weight: 400; color: var(--muted); }
+.pager-next { text-align: right; }
+.doc-meta { margin-top: 2rem; font-size: 0.88rem; color: var(--muted); }
+
+.footer-links { list-style: none; display: flex; flex-wrap: wrap; gap: 0.5rem 1.25rem; margin: 0; padding: 0; }
+
+@media (max-width: 860px) {
+  .docs-layout { grid-template-columns: 1fr; gap: 1.5rem; padding-top: 1.5rem; }
+  .docs-nav { display: none; }
+  .docs-menu { display: block; }
+  .toc ul { columns: 1; }
+  .anchor { display: none; }
+}
+
+/* Header pills: version, language and menu share one shape on desktop and phones: 28px high,
+   thin border, fully rounded, mono label. GitHub stays the one filled button. */
+.version-tag, .lang-switch, .nav-toggle {
+  box-sizing: border-box; height: 1.75rem; padding: 0 0.6rem;
+  border: 1px solid var(--border); border-radius: 999px;
+  font: 500 0.72rem/1 var(--font-mono); letter-spacing: 0.04em; color: var(--muted);
+  align-items: center; justify-content: center;
+}
+.version-tag, .lang-switch { display: inline-flex; }
+.nav-toggle { min-width: 2.6rem; background: none; cursor: pointer; }
+.lang-switch:hover, .nav-toggle:hover { color: var(--fg); border-color: var(--fg); }
+.nav-toggle-bars, .nav-toggle-bars::before, .nav-toggle-bars::after { width: 0.85rem; }
+@media (max-width: 640px) {
+  .nav-toggle { display: inline-flex; color: var(--fg); }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "mestiere",
+  "short_name": "mestiere",
+  "description": "Your team's agent skills, versioned in git and installed into every repository.",
+  "start_url": "/",
+  "display": "browser",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "icons": [
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
