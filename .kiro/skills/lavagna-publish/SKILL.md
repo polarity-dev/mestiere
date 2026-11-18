@@ -4,7 +4,7 @@ description: Publish the mestiere.io website (or any static page) on Lavagna for
 ---
 # Publishing pages on Lavagna
 
-Lavagna (ex Rigger) shows pages in frames: a frame's url is a file under the project's `dist/`.
+Lavagna (ex Rigger) shows pages in frames: a frame's url is a file under the project's `dist/`, written relative to it (`index.html`, never `dist/index.html`, which points at `dist/dist/` and shows nothing).
 **Lavagna always gets a dedicated build where every page is one self-contained HTML file.**
 Never push the production build as is: root-relative URLs (`/css/site.css`), folder URLs
 (`docs/`) and separate asset files do not work reliably inside frames.
@@ -57,7 +57,7 @@ lavagna push --yes                 # uploads dist-lavagna/* to the project's dis
 lavagna board --board main --yes   # check frames
 ```
 
-New page on the board: `lavagna board create frame --id <id> --title "<Title>" --url dist/<flat-name>.html --x … --y … --width 1440 --height 900 --board main --yes`.
+New page on the board: `lavagna board create frame --id <id> --title "<Title>" --url <flat-name>.html --x … --y … --width 1440 --height 900 --board main --yes`.
 Read the current geometry first (`lavagna board --board main`): Giovanni moves frames by hand.
 
 ## Cleanup
