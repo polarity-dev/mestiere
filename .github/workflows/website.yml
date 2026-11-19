@@ -1,0 +1,38 @@
+# Publishes mestiere.io on every push to main that touches the website.
+# AWS access: OIDC role mestiere-website-github-deploy (stack mestiere-website,
+# polarity-tools 404420994311), trusted only for refs/heads/main of this repo.
+name: website
+on:
+  push:
+    branches: [main]
+    paths:
+      - website/**
+      - .github/workflows/website.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: website-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # No `environment:` here: it would change the OIDC subject the role trusts.
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # tags and dates feed the version and sitemap lastmod
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: arn:aws:iam::404420994311:role/mestiere-website-github-deploy
+          aws-region: eu-west-1
+      - run: website/ops.sh deploy
+        env:
+          SITE_PROFILE: ""

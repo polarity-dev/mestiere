@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/mestiere-wordmark-white.svg">
-    <img src="docs/assets/mestiere-wordmark-black.svg" alt="mestiere" width="480">
+    <img src="docs/assets/mestiere-wordmark-black.svg" alt="mestiere" width="390">
   </picture>
 </p>
 

@@ -1,0 +1,125 @@
+<section class="hero" id="main" aria-labelledby="hero-title">
+      <div class="container hero-grid">
+        <div class="hero-text">
+          <p class="eyebrow">Agent Skills manager for Claude Code, Kiro, Codex, Cursor and more</p>
+          <h1 id="hero-title">Your team's agent skills, in every repository.</h1>
+          <p class="lead">Keep skills in one git registry. Every project installs the ones it needs, pinned to an exact version.</p>
+        </div>
+        <div class="hero-graphic">
+          {{heroGraphic}}
+        </div>
+        <div class="hero-install desktop-only">
+          <pre class="terminal"><code>brew install --cask polarity-dev/tap/mestiere</code></pre>
+          <p class="actions">
+            <a class="button" href="/docs/">Get started</a>
+            <a class="button button-primary" href="/install/">Install mestiere</a>
+          </p>
+        </div>
+        <!-- On a phone there is no terminal: the page only explains and promotes -->
+        <div class="hero-install mobile-only">
+          <p class="actions">
+            <a class="button button-primary" href="#how-title">How it works</a>
+          </p>
+        </div>
+        <p class="hero-meta">{{liveVersionV}} · macOS and Linux · free and open source on <a href="https://github.com/polarity-dev/mestiere">GitHub</a></p>
+      </div>
+    </section>
+
+    <section class="section section-alt" aria-labelledby="how-title">
+      <div class="container">
+        <h2 id="how-title">How it works</h2>
+        <ol class="steps">
+          <li>
+            <h3>Keep skills in a registry</h3>
+            <p>A registry is a plain git repository of <a href="https://agentskills.io">Agent Skills</a>, grouped in namespaces like <code>frontend</code> or <code>backend</code>. Review skills like any other code.</p>
+          </li>
+          <li>
+            <h3>Install them in each project</h3>
+            <p><code>mestiere add frontend</code> copies the skills into <code>.agents/skills/</code> and locks each one to a registry commit in <code>skills.yaml</code>.</p>
+          </li>
+          <li>
+            <h3>Every agent sees them</h3>
+            <p>Codex, Gemini CLI, Cursor and Copilot read <code>.agents/skills/</code> directly; Claude Code and Kiro get links in their own folders. Teammates and CI run <code>mestiere sync</code> and get the same files.</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="section desktop-only" aria-labelledby="quick-start-title">
+      <div class="container">
+        <h2 id="quick-start-title">Quick start</h2>
+        <div class="columns">
+          <div>
+            <h3>Install skills in a project</h3>
+            <pre class="terminal"><code>mestiere init --agents claude,kiro
+mestiere registry add polarity git@github.com:polarity-dev/skills.git
+mestiere add frontend backend/db-migrations
+git add skills.yaml .gitignore
+git commit -m "Add team skills"</code></pre>
+            <p>A teammate who clones the repository runs <code>mestiere sync</code>.</p>
+            <p class="more"><a href="/docs/">Read the getting started guide</a></p>
+          </div>
+          <div>
+            <h3>Publish skills in a registry</h3>
+            <pre class="terminal"><code>mkdir skills &amp;&amp; cd skills &amp;&amp; git init
+mestiere registry init --name polarity
+mestiere registry new-namespace frontend --description "Frontend practices"
+mestiere registry new-skill frontend/forms --description "Build accessible forms"
+mestiere registry lint</code></pre>
+            <p>Push it, and any project can add it.</p>
+            <p class="more"><a href="/docs/registries/">Learn how to author a registry</a></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-alt mobile-plain" aria-labelledby="why-title">
+      <div class="container">
+        <h2 id="why-title">Why mestiere</h2>
+        <p class="section-lead"><em>Mestiere</em> is Italian for craft: the know-how a workshop hands from one person to the next. mestiere does that for coding agents.</p>
+        <ul class="features">
+          <li><h3>One source of truth</h3><p>Skills live in a git registry, public or private, reviewed like any other code.</p></li>
+          <li><h3>Organized by namespace</h3><p>Install a whole namespace or a single skill. New skills in an installed namespace arrive on the next update.</p></li>
+          <li><h3>Reproducible</h3><p>Every install is locked to a registry commit and a content hash. Teammates and CI get byte-identical skills.</p></li>
+          <li><h3>Every agent at once</h3><p>Files live once in <code>.agents/skills/</code>, which Codex, Gemini CLI, Cursor and others read directly. Claude Code and Kiro get symlinks to it.</p></li>
+          <li><h3>Out of your way</h3><p>Installed skills are ignored by git by default. Your own skills sit next to them untouched, and committing any skill is one command.</p></li>
+          <li><h3>Safe by construction</h3><p>mestiere replaces a folder only when it can prove it's an unmodified copy of a published skill. <a href="/docs/how-it-works/#safety-model">See the safety model</a>.</p></li>
+          <li><h3>No lock-in</h3><p>Registries are plain git repositories. Installed skills are plain folders that follow the Agent Skills spec.</p></li>
+          <li><h3>Your git, your auth</h3><p>mestiere runs the system <code>git</code>, so SSH keys, credential helpers and <code>gh auth</code> just work.</p></li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section desktop-only" aria-labelledby="agents-title">
+      <div class="container narrow">
+        <h2 id="agents-title">Or let your agent set it up</h2>
+        <p>The Homebrew install also gives Claude Code and Kiro mestiere's own skills, for every project on your machine. Then ask your agent, from any repository:</p>
+        <pre class="terminal prompt"><code>Set up mestiere for this repo with our registry git@github.com:polarity-dev/skills.git</code></pre>
+        <p>The agent runs <code>mestiere init</code>, shows you what the registry offers, installs the skills that fit the codebase and commits <code>skills.yaml</code>. Later prompts work the same way: "Are any of our skills outdated? Update them and summarize what changed".</p>
+        <p>Installed another way? Run <code>mestiere add -g mestiere</code> once. Agents that read the web can start from <a href="/llms.txt">llms.txt</a>.</p>
+        <p class="more"><a href="/docs/agents/">More on agents</a></p>
+      </div>
+    </section>
+
+    <section class="section section-alt" aria-labelledby="faq-title">
+      <div class="container narrow">
+        <h2 id="faq-title">Frequently asked questions</h2>
+        <div class="faq">
+          {{faq}}
+        </div>
+      </div>
+    </section>
+
+    <section class="section cta" aria-labelledby="cta-title">
+      <div class="container narrow">
+        <h2 id="cta-title">Give every repository the same skills</h2>
+        <p class="actions desktop-only">
+          <a class="button" href="/docs/commands/">Browse the commands</a>
+          <a class="button button-primary" href="/install/">Install mestiere</a>
+        </p>
+        <p class="cta-note mobile-only">mestiere runs in the terminal, on macOS and Linux.</p>
+        <p class="actions mobile-only">
+          <a class="button button-github" href="https://github.com/polarity-dev/mestiere">{{githubIcon}}<span>Star on GitHub</span></a>
+        </p>
+      </div>
+    </section>

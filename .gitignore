@@ -13,5 +13,14 @@ coverage.*
 .vscode/
 *.swp
 
+# Website build
+/website/dist/
+/website/dist-lavagna/
+/website/node_modules/
+
 # mestiere: skills are ignored by default; add !<dir>/skills/<name> to commit one
 **/.*/skills/*
+
+# Parmigiano Text desktop fonts (licensed, Typotheque): local source for the woff2 web files, never published
+/docs/assets/fonts/*.otf
+!.kiro/skills/lavagna-publish
