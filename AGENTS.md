@@ -47,7 +47,7 @@ These are the product. Don't weaken them to make a change easier.
 - Tests that touch git or the filesystem call `testutil.Isolate(t)` first, so they never read the developer's git config, cache or home-level skills. Build registries with `testutil.NewRegistry`, not fixtures on disk.
 - Prefer integration-style tests that drive real git repos over mocks.
 - Comments explain why, not what. A known limitation gets `// shortcut: <limit>, <when to upgrade>`.
-- Commit messages use conventional prefixes (`feat:`, `fix:`, `docs:`, `test:`, `chore:`); `docs:`, `test:` and `chore:` are left out of the changelog.
+- Commit messages are one line of at most 72 characters, with no body: a conventional prefix and an optional scope, such as `feat(cli): add prune`. Types are `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `chore`, `ci`, `build`, `style`, `revert`; `docs:`, `test:` and `chore:` are left out of the changelog.
 
 ## Bundled skills
 
