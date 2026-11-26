@@ -81,12 +81,12 @@ func globalConfigDir(home string) string {
 func homeAgents(home string) []string {
 	var ids []string
 	for _, a := range agents.Harnesses() {
-		if info, err := os.Stat(filepath.Join(home, filepath.Dir(filepath.FromSlash(a.Dir)))); err == nil && info.IsDir() {
+		if a.GlobalDir != "" && a.Installed(home) {
 			ids = append(ids, a.ID)
 		}
 	}
 	if len(ids) == 0 {
-		return agents.HarnessIDs()
+		return []string{"claude", "kiro"}
 	}
 	return ids
 }
@@ -221,21 +221,55 @@ func (p *Project) validate() error {
 	return nil
 }
 
+// harnesses returns the configured agents that get links in this scope.
 func (p *Project) harnesses() []agents.Agent {
 	h, _ := agents.Resolve(p.Manifest.Agents)
-	return h
+	var out []agents.Agent
+	for _, a := range h {
+		if a.LinkDir(p.Global) != "" {
+			out = append(out, a)
+		}
+	}
+	return out
 }
+
+// linkAgents returns the store and every known agent with a link folder in
+// this scope, configured or not, one per folder. Cleanup and listing walk
+// these folders; agents that read the store directly have none.
+func (p *Project) linkAgents() []agents.Agent {
+	seen := map[string]bool{}
+	var out []agents.Agent
+	for _, a := range agents.Known() {
+		if dir := a.LinkDir(p.Global); dir != "" && !seen[dir] {
+			seen[dir] = true
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+// linkHarnesses is linkAgents without the store.
+func (p *Project) linkHarnesses() []agents.Agent { return p.linkAgents()[1:] }
+
+// linkRel is the folder, relative to the root, where a gets links in this scope.
+func (p *Project) linkRel(a agents.Agent) string { return a.LinkDir(p.Global) }
 
 func (p *Project) ignoreProbes() []string {
 	probes := []string{path.Join(agents.Canonical.Dir, "mestiere-probe")}
 	for _, a := range p.harnesses() {
-		probes = append(probes, path.Join(a.Dir, "mestiere-probe"))
+		probes = append(probes, path.Join(p.linkRel(a), "mestiere-probe"))
 	}
 	return probes
 }
 
+// agentDir is where a gets links in this scope. Callers pass only agents from
+// harnesses or linkAgents, which always have a link folder.
 func (p *Project) agentDir(a agents.Agent) string {
-	return filepath.Join(p.Root, filepath.FromSlash(a.Dir))
+	dir := p.linkRel(a)
+	if dir == "" {
+		panic("agentDir: " + a.ID + " has no link folder")
+	}
+	return filepath.Join(p.Root, filepath.FromSlash(dir))
 }
 
 func (p *Project) canonicalDir() string { return p.agentDir(agents.Canonical) }

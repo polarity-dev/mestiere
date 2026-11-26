@@ -40,6 +40,9 @@ type LocalSkill struct {
 	Name      string `json:"name"`
 	Path      string `json:"path"`
 	Committed bool   `json:"committed"`
+	// Origin is OriginCopy, OriginLink or OriginBroken; Target is a link's target.
+	Origin string `json:"origin"`
+	Target string `json:"target,omitempty"`
 }
 
 type Status struct {
@@ -48,6 +51,8 @@ type Status struct {
 	Local  []LocalSkill  `json:"local"`
 	// Global lists skills in the home-level agent directories; Committed is always false.
 	Global []LocalSkill `json:"global"`
+	// Shadowed lists project skills an agent also finds in the home folder.
+	Shadowed []Shadow `json:"shadowed"`
 }
 
 func (p *Project) Status() (*Status, error) {
@@ -81,24 +86,40 @@ func (p *Project) Status() (*Status, error) {
 		st.Skills = append(st.Skills, ss)
 	}
 	sort.Slice(st.Skills, func(i, j int) bool { return st.Skills[i].Name < st.Skills[j].Name })
-	for _, a := range agents.Known() {
-		for _, name := range skillDirs(p.agentDir(a)) {
+	for _, dir := range p.scanDirs() {
+		for _, name := range skillEntries(filepath.Join(p.Root, filepath.FromSlash(dir))) {
 			if _, ok := desired[name]; ok {
 				continue
 			}
-			rel := path.Join(a.Dir, name)
-			st.Local = append(st.Local, LocalSkill{Name: name, Path: rel, Committed: committed(rel)})
+			rel := path.Join(dir, name)
+			origin, target := originOf(filepath.Join(p.Root, filepath.FromSlash(rel)))
+			st.Local = append(st.Local, LocalSkill{Name: name, Path: rel, Committed: committed(rel), Origin: origin, Target: target})
 		}
 	}
 	// Harnesses also load skills from the same directories under $HOME.
 	if home, err := os.UserHomeDir(); err == nil && !samePath(home, p.Root) {
-		for _, a := range agents.Known() {
-			for _, name := range skillDirs(filepath.Join(home, filepath.FromSlash(a.Dir))) {
-				st.Global = append(st.Global, LocalSkill{Name: name, Path: path.Join("~", a.Dir, name)})
+		for _, dir := range globalDirs() {
+			for _, name := range skillEntries(filepath.Join(home, filepath.FromSlash(dir))) {
+				origin, target := originOf(filepath.Join(home, filepath.FromSlash(dir), name))
+				st.Global = append(st.Global, LocalSkill{Name: name, Path: path.Join("~", dir, name), Origin: origin, Target: target})
 			}
 		}
 	}
+	st.Shadowed = p.Shadows()
 	return st, nil
+}
+
+// skillEntries is skillDirs plus broken links, which are leftovers worth reporting.
+func skillEntries(dir string) []string {
+	names := skillDirs(dir)
+	entries, _ := os.ReadDir(dir)
+	for _, e := range entries {
+		if p := filepath.Join(dir, e.Name()); e.Type()&fs.ModeSymlink != 0 && !strings.HasPrefix(e.Name(), ".") && isBroken(p) {
+			names = append(names, e.Name())
+		}
+	}
+	sort.Strings(names)
+	return names
 }
 
 // skillDirs lists the non-hidden directories in dir, following symlinks.

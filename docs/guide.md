@@ -10,7 +10,7 @@ This guide covers everything a project that installs skills needs: the files mes
 | Namespace | A folder of related skills in a registry, such as `frontend` or `backend`. |
 | Skill | A folder with a `SKILL.md`, plus any scripts, references and assets it needs. |
 | Installed name | `<namespace>-<skill>`, e.g. `frontend-forms`. Commands also accept it. When a hyphenated name could mean more than one namespace or skill, write `ns/skill`, or `ns/` for a namespace. |
-| Agent | A harness that reads skills. Codex, Gemini CLI, Cursor and GitHub Copilot read `.agents/skills/` directly; Claude Code and Kiro read their own folder (`.claude/skills/`, `.kiro/skills/`), which mestiere links. |
+| Agent | A harness that reads skills. Cursor, Codex, Gemini CLI, Copilot and OpenCode read `.agents/skills/` in a project; Claude Code and Kiro read their own folder (`.claude/skills/`, `.kiro/skills/`), which mestiere links. See [installed layout](#installed-layout). |
 | Lock | The exact commit and content hash of each installed skill, stored in `skills.yaml`. |
 
 ## `skills.yaml`
@@ -54,13 +54,26 @@ registries:
 
 Links are relative, so they keep working when the repository moves.
 
-| Agent | ID | Skills folder |
-|---|---|---|
-| All (canonical store) | `agents` (always on) | `.agents/skills/` |
-| Claude Code | `claude` | `.claude/skills/` |
-| Kiro | `kiro` | `.kiro/skills/` |
+`.agents/skills/` is the source of truth; every other folder only holds links to it.
 
-Harnesses that read `.agents/skills/` directly see installed skills without any extra setting.
+| Agent | ID | Links in a project | Links for global skills | Same name in project and `~` |
+|---|---|---|---|---|
+| All (store) | `agents` (always on) | `.agents/skills/` | `~/.agents/skills/` | |
+| Claude Code | `claude` (`claude-code`) | `.claude/skills/` | `~/.claude/skills/` | global copy loads |
+| Kiro | `kiro` (`kiro-cli`) | `.kiro/skills/` | `~/.kiro/skills/` | project copy loads |
+| Cursor | `cursor` | none, reads `.agents/skills/` | none, reads `~/.agents/skills/` | not documented |
+| Codex | `codex` | none | none | not documented |
+| Gemini CLI | `gemini` (`gemini-cli`) | none | `~/.gemini/skills/` | not documented |
+| GitHub Copilot | `copilot` (`github-copilot`) | none | `~/.copilot/skills/` | not documented |
+| OpenCode | `opencode` | none | `~/.config/opencode/skills/` | not documented |
+
+List in `agents` the ones that need links. Agents that read `.agents/skills/` see project skills with no setting.
+
+### Skills installed in both places
+
+A skill can exist in the project and in your home folder under the same name, for example a team skill locked in `skills.yaml` and an older personal copy. Which one runs depends on the agent: Claude Code loads the personal copy, so the team's locked version never reaches it.
+
+`status` lists these skills under "also installed globally", with the copy each agent loads. `doctor` warns when an agent loads the global copy, and `add` warns right after installing such a skill. Neither fails, even with `--strict`, because the global copy is on one machine only. Fix it by removing the global copy (`mestiere remove -g <name>`, or `mestiere prune -g <name>` if mestiere didn't install it) or by renaming one of them.
 
 ## `.gitignore`
 
@@ -95,6 +108,8 @@ This ignores every skill folder inside any hidden directory, nested packages inc
 | `status [--json]` | Show installed skills, their links, local skills and global skills |
 | `track` / `untrack <skill>...` | Commit a skill, or stop committing it |
 | `eject <skill>... [--track]` | Keep an installed skill as your own; mestiere stops managing it |
+| `adopt <skill>...` | Manage a skill you installed another way, when a configured registry publishes the same content |
+| `prune -g [skill]...` | Move global skills mestiere doesn't manage to the trash; without names, a picker for people |
 | `doctor [--strict] [--offline] [--json]` | Check everything without changing anything |
 | `cache dir \| info \| clean` | Inspect or clear the registry cache |
 | `registry init \| new-namespace \| new-skill \| lint` | Author a registry |
@@ -174,7 +189,8 @@ mestiere manages only the skills listed in the lock. Anything else in a skills f
 
 - **Write a skill** directly in `.agents/skills/`, `.claude/skills/` or `.kiro/skills/`, then `mestiere track <name>` to commit it.
 - **Customize a registry skill** with `mestiere eject <name>`. The files stay where they are and mestiere stops updating them. The skill is excluded from future installs of its namespace.
-- **See uncommitted local skills** with `mestiere status`. They're ignored by default, so this catches a skill that teammates would otherwise never get. `status` also lists global skills from `~/.agents/skills`, `~/.claude/skills` and `~/.kiro/skills`, and works in folders without a `skills.yaml`.
+- **See uncommitted local skills** with `mestiere status`. They're ignored by default, so this catches a skill that teammates would otherwise never get. `status` also lists global skills from every home folder an agent reads, and works in folders without a `skills.yaml`.
+- **Bring a copy under management** with `mestiere adopt <name>`. It works when a configured registry publishes a skill with the same name and content, such as one you copied by hand or installed with another tool. The folder becomes the managed copy.
 
 ## Global skills
 
@@ -190,6 +206,23 @@ mestiere status -g
 Global skills use the same commands and safety rules as a project. The manifest is `~/.config/mestiere/skills.yaml` (or `$XDG_CONFIG_HOME/mestiere/skills.yaml`), files go to `~/.agents/skills/`, and the agents that have a folder in your home directory get links. A new global manifest comes with the `mestiere` registry configured. `track`, `untrack` and `init` don't apply, because nothing global is in git.
 
 Prefer project installs for skills a team relies on: they're locked in a committed `skills.yaml`, so teammates and CI get the same versions. Global skills are per machine.
+
+### Cleaning up global skills
+
+Global skills load in every session of every project, so leftovers cost context everywhere. `mestiere doctor -g` reports:
+
+- skills mestiere doesn't manage, with `status -g` showing each one as a copy, a link (and its target) or a broken link;
+- broken links, and skills with several separate copies that can drift apart;
+- for each agent installed on the machine, how many global skills it loads and how many characters their names and descriptions take.
+
+Then act on each one:
+
+```sh
+mestiere adopt -g shonin          # manage it, if a configured registry publishes the same content
+mestiere prune -g ponytail-audit  # move every copy and link of it to the trash
+```
+
+`prune` moves skills to a dated folder under `~/.local/share/mestiere/trash` (`$XDG_DATA_HOME/mestiere/trash` when set). Nothing is deleted: move a folder back to restore it. It refuses skills mestiere manages; remove those with `mestiere remove -g`. Without names, people get a picker; agents and scripts must name the skills.
 
 ## CI
 

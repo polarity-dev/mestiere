@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/polarity-dev/mestiere/internal/agents"
 	"github.com/polarity-dev/mestiere/internal/fsx"
 	"github.com/polarity-dev/mestiere/internal/gitignore"
 	"github.com/polarity-dev/mestiere/internal/manifest"
@@ -1018,7 +1019,7 @@ func TestPinnedRef(t *testing.T) {
 
 func TestInitValidation(t *testing.T) {
 	testutil.Isolate(t)
-	if _, _, err := Init(t.TempDir(), []string{"cursor"}, ""); err == nil {
+	if _, _, err := Init(t.TempDir(), []string{"windsurf"}, ""); err == nil {
 		t.Error("unknown agent accepted")
 	}
 	if _, _, err := Init(t.TempDir(), nil, "hardlink"); err == nil {
@@ -1123,5 +1124,75 @@ func mustReport(t *testing.T) func(*Report, error) *Report {
 			t.Fatal(err)
 		}
 		return r
+	}
+}
+
+func TestShadowsAdoptAndPrune(t *testing.T) {
+	f := newFixture(t, "")
+	home := os.Getenv("HOME")
+	requireClean(t, mustReport(t)(f.reopen().Add("", []string{"frontend/forms"}, false)))
+
+	// Claude Code prefers the personal copy, Kiro the project one.
+	testutil.WriteFile(t, filepath.Join(home, ".claude/skills/frontend-forms/SKILL.md"), "old", 0o644)
+	testutil.WriteFile(t, filepath.Join(home, ".kiro/skills/frontend-forms/SKILL.md"), "old", 0o644)
+	st, err := f.reopen().Status()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]agents.Precedence{}
+	for _, s := range st.Shadowed {
+		got[s.Name+"@"+s.Agent] = s.Loads
+	}
+	if got["frontend-forms@claude"] != agents.GlobalWins || got["frontend-forms@kiro"] != agents.ProjectWins {
+		t.Fatalf("shadows = %+v", st.Shadowed)
+	}
+	r, err := f.reopen().Doctor(DoctorOptions{Offline: true})
+	if err != nil || r.Failed() || len(r.Warnings) != 1 || !strings.Contains(r.Warnings[0], "claude loads ~/.claude/skills/frontend-forms") {
+		t.Fatalf("doctor = %+v, %v", r, err)
+	}
+
+	// An ejected skill still matches what the registry publishes, so adopt takes it back.
+	requireClean(t, mustReport(t)(f.reopen().Eject([]string{"frontend-forms"}, false)))
+	if _, err := f.reopen().Adopt([]string{"frontend-forms"}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(f.read("skills.yaml"), "frontend-forms:") {
+		t.Fatal("adopt didn't lock the skill")
+	}
+	testutil.WriteFile(t, f.path(".kiro/skills/mine/SKILL.md"), "mine", 0o644)
+	if _, err := f.reopen().Adopt([]string{"mine"}); err == nil || !strings.Contains(err.Error(), "no configured registry publishes mine") {
+		t.Fatalf("adopt of an unpublished skill: %v", err)
+	}
+	if _, err := f.reopen().Prune([]string{"mine"}); err == nil {
+		t.Fatal("prune worked outside the global scope")
+	}
+
+	g, err := OpenGlobal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("../../.kiro/skills/frontend-forms", filepath.Join(home, ".claude/skills/linked")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("/nonexistent", filepath.Join(home, ".kiro/skills/gone")); err != nil {
+		t.Fatal(err)
+	}
+	r, err = g.Doctor(DoctorOptions{Offline: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(r.Warnings, "\n")
+	if !strings.Contains(joined, "~/.kiro/skills/gone is a broken link") || !strings.Contains(joined, "frontend-forms has 2 separate copies") {
+		t.Fatalf("doctor -g warnings:\n%s", joined)
+	}
+	requireClean(t, mustReport(t)(g.Prune([]string{"frontend-forms", "gone"})))
+	for _, rel := range []string{".claude/skills/frontend-forms", ".kiro/skills/frontend-forms", ".kiro/skills/gone"} {
+		if _, err := os.Lstat(filepath.Join(home, rel)); err == nil {
+			t.Errorf("prune left ~/%s", rel)
+		}
+	}
+	trash, _ := TrashDir()
+	if found, _ := filepath.Glob(filepath.Join(trash, "*", ".kiro/skills/frontend-forms/SKILL.md")); len(found) != 1 {
+		t.Fatalf("trash content: %v", found)
 	}
 }

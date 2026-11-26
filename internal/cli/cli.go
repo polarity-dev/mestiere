@@ -61,7 +61,7 @@ type app struct {
 func (a *app) human() bool { return a.interactive && !a.noInput }
 
 // globalCommands are the commands that accept -g, listed in flag errors.
-var globalCommands = "add, remove, sync, update, outdated, status, doctor, eject and the registry add, remove, list and show subcommands"
+var globalCommands = "add, remove, sync, update, outdated, status, doctor, eject, adopt, prune and the registry add, remove, list and show subcommands"
 
 // scoped gives cmd the -g flag. It is per command, not on the root, so commands
 // without a global meaning reject it instead of ignoring it.
@@ -114,7 +114,7 @@ func (a *app) rootCmd() *cobra.Command {
 	root.AddCommand(
 		a.initCmd(), a.registryCmd(), a.scoped(a.addCmd()), a.scoped(a.removeCmd()), a.scoped(a.syncCmd()),
 		a.scoped(a.updateCmd()), a.scoped(a.outdatedCmd()), a.scoped(a.statusCmd()), a.trackCmd(), a.untrackCmd(),
-		a.scoped(a.ejectCmd()), a.scoped(a.doctorCmd()), a.cacheCmd(),
+		a.scoped(a.ejectCmd()), a.scoped(a.adoptCmd()), a.scoped(a.pruneCmd()), a.scoped(a.doctorCmd()), a.cacheCmd(),
 	)
 	return root
 }
@@ -718,12 +718,35 @@ func (a *app) showStatus(p *project.Project, st *project.Status, managed bool) {
 		fmt.Fprintf(a.out, "  %s %-40s %s %s\n", mark, s.Name, state,
 			stl.faint.Render(fmt.Sprintf("%s@%s  %s%s", s.Registry, registry.Short(s.Commit), strings.Join(links, " "), committed)))
 	}
+	if len(st.Shadowed) > 0 {
+		fmt.Fprintln(a.out)
+		a.heading("also installed globally:", "Also installed globally")
+		for _, sh := range st.Shadowed {
+			loads := map[agents.Precedence]string{
+				agents.GlobalWins:  "loads the global copy",
+				agents.ProjectWins: "loads the project copy",
+				agents.Unknown:     "may load either copy",
+			}[sh.Loads]
+			line := fmt.Sprintf("  %-40s %s %s (%s)", sh.Name, sh.Agent, loads, sh.Path)
+			if a.human() && sh.Loads != agents.ProjectWins {
+				line = stl.warn.Render(line)
+			}
+			fmt.Fprintln(a.out, line)
+		}
+	}
 	if len(st.Local) > 0 {
 		fmt.Fprintln(a.out)
 		a.heading("local skills:", "Local skills")
 		for _, l := range st.Local {
 			if p.Global {
-				fmt.Fprintf(a.out, "  ~/%s\n", l.Path)
+				origin := l.Origin
+				if l.Target != "" {
+					origin += " → " + l.Target
+				}
+				if a.human() {
+					origin = stl.faint.Render(origin)
+				}
+				fmt.Fprintf(a.out, "  %-40s %s\n", "~/"+l.Path, origin)
 				continue
 			}
 			state := "not committed"
@@ -797,6 +820,83 @@ func (a *app) ejectCmd() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&track, "track", false, "also commit the ejected skills")
 	return cmd
+}
+
+func (a *app) adoptCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "adopt <skill>...",
+		Short: "Manage a skill you installed another way, when a registry publishes the same content",
+		Long: "adopt looks for a configured registry that publishes a skill with the same name and content as the folder on disk, " +
+			"then installs it from there. The folder becomes the managed copy, and links replace other copies.",
+		Args:              cobra.MinimumNArgs(1),
+		ValidArgsFunction: a.completeUnmanaged,
+		RunE: func(_ *cobra.Command, args []string) error {
+			p, err := a.open()
+			if err != nil {
+				return err
+			}
+			return a.report(a.working("Looking for the publisher", func() (*project.Report, error) { return p.Adopt(args) }))
+		},
+	}
+}
+
+func (a *app) pruneCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "prune -g [skill]...",
+		Short: "Move global skills that mestiere doesn't manage to the trash",
+		Long: "prune moves every copy and link of the named global skills to a dated folder under " +
+			"~/.local/share/mestiere/trash. Nothing is deleted: move a folder back to restore it. " +
+			"Run `mestiere doctor -g` first to see what is unmanaged.",
+		ValidArgsFunction: a.completeUnmanaged,
+		RunE: func(_ *cobra.Command, args []string) error {
+			if !a.global {
+				return errors.New("prune cleans up global skills; run `mestiere prune -g <skill>`")
+			}
+			p, err := a.open()
+			if err != nil {
+				return err
+			}
+			if len(args) == 0 {
+				names := p.UnmanagedNames()
+				if len(names) == 0 {
+					a.printf("every global skill is managed by mestiere\n")
+					return nil
+				}
+				if !a.human() {
+					return fmt.Errorf("name the skills to prune; unmanaged global skills: %s", strings.Join(names, ", "))
+				}
+				if args, err = a.pickUnmanaged(names); err != nil {
+					return err
+				}
+			}
+			return a.report(p.Prune(args))
+		},
+	}
+	return cmd
+}
+
+// pickUnmanaged lets a person choose global skills to prune, then confirm.
+func (a *app) pickUnmanaged(names []string) ([]string, error) {
+	var picked []string
+	err := huh.NewMultiSelect[string]().
+		Title("Move which global skills to the trash?").
+		Description("They aren't managed by mestiere. Nothing is deleted; each can be moved back.\nspace selects · / filters · enter continues").
+		Options(huh.NewOptions(names...)...).Value(&picked).Filterable(true).Run()
+	if err != nil {
+		return nil, err
+	}
+	if len(picked) == 0 {
+		return nil, errNoSelection
+	}
+	ok := false
+	if err := huh.NewConfirm().Title(fmt.Sprintf("Move %d skills to the trash?", len(picked))).
+		Description(strings.Join(picked, ", ")).Affirmative("Move").Negative("Cancel").Value(&ok).Run(); err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, huh.ErrUserAborted
+	}
+	return picked, nil
 }
 
 type doctorJSON struct {

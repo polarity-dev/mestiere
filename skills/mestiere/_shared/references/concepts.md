@@ -26,8 +26,10 @@ before running commands you haven't used yet.
   relative symlink: `.claude/skills/<name>`, `.kiro/skills/<name>`.
 - `.gitignore` contains `**/.*/skills/*`, so every skill folder is ignored unless a
   `!<dir>/skills/<name>` exception commits it.
-- Global skills live in `~/.agents/skills/`, `~/.claude/skills/` and `~/.kiro/skills/`, and
-  agents load them in every project. `mestiere status` lists them. `-g` manages the ones
+- Global skills live in `~/.agents/skills/`, linked into the folders agents read under `~`
+  (`~/.claude/skills/`, `~/.kiro/skills/`, `~/.gemini/skills/`, …), and agents load them in
+  every project. A skill in both the project and `~` may be shadowed: Claude Code loads the
+  global copy, Kiro the project one, and `status` shows which. `mestiere status` lists them. `-g` manages the ones
   listed in `~/.config/mestiere/skills.yaml`; the rest belong to the user, as in a project.
 
 ## Target syntax

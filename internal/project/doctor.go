@@ -6,7 +6,6 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/polarity-dev/mestiere/internal/agents"
 	"github.com/polarity-dev/mestiere/internal/gitignore"
 	"github.com/polarity-dev/mestiere/internal/gitx"
 	"github.com/polarity-dev/mestiere/internal/registry"
@@ -67,6 +66,15 @@ func (p *Project) Doctor(opts DoctorOptions) (*Report, error) {
 		r.Warnings = append(r.Warnings, sr.Warnings...)
 	}
 
+	p.warnShadows(r, nil)
+	if p.Global {
+		st, err := p.Status()
+		if err != nil {
+			return r, err
+		}
+		p.doctorGlobal(r, st)
+	}
+
 	if inRepo {
 		st, err := p.Status()
 		if err != nil {
@@ -97,8 +105,8 @@ func (p *Project) checkTrackedInstalls(r *Report) {
 		return
 	}
 	var dirs []string
-	for _, a := range agents.Known() {
-		dirs = append(dirs, a.Dir)
+	for _, a := range p.linkAgents() {
+		dirs = append(dirs, p.linkRel(a))
 	}
 	out, err := gitx.RunInput(p.Root, nil, append([]string{"ls-files", "-z", "--"}, dirs...)...)
 	if err != nil {
@@ -106,13 +114,13 @@ func (p *Project) checkTrackedInstalls(r *Report) {
 	}
 	seen := map[string]bool{}
 	for _, file := range strings.Split(string(out), "\x00") {
-		for _, a := range agents.Known() {
-			rest, ok := strings.CutPrefix(file, a.Dir+"/")
+		for _, dir := range dirs {
+			rest, ok := strings.CutPrefix(file, dir+"/")
 			if !ok {
 				continue
 			}
 			name, _, _ := strings.Cut(rest, "/")
-			rel := path.Join(a.Dir, name)
+			rel := path.Join(dir, name)
 			if _, managed := desired[name]; !managed || seen[rel] {
 				continue
 			}

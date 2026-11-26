@@ -107,6 +107,15 @@ func (a *app) completeSkillFolders(cmd *cobra.Command, args []string, toComplete
 	return names, noFiles
 }
 
+// completeUnmanaged lists skills mestiere doesn't manage, for adopt and prune.
+func (a *app) completeUnmanaged(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	p := a.completionProject()
+	if p == nil {
+		return nil, noFiles
+	}
+	return matching(p.UnmanagedNames(), args, toComplete), noFiles
+}
+
 // completeRegistries lists the configured registries, for --registry.
 func (a *app) completeRegistries(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	p := a.completionProject()

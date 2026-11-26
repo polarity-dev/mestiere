@@ -129,7 +129,7 @@ func (s *syncer) run() {
 		}
 	}
 	s.cleanCanonical()
-	for _, a := range agents.Harnesses() {
+	for _, a := range s.p.linkHarnesses() {
 		s.cleanHarness(a, configured[a.ID])
 	}
 	if !s.opts.DryRun {
@@ -404,7 +404,7 @@ func (s *syncer) cleanHarness(a agents.Agent, configured bool) {
 }
 
 func (s *syncer) removeStaging() {
-	for _, a := range agents.Known() {
+	for _, a := range s.p.linkAgents() {
 		entries, err := os.ReadDir(s.p.agentDir(a))
 		if err != nil {
 			continue

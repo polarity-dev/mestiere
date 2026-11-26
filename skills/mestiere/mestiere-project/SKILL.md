@@ -67,7 +67,9 @@ the next sync refuses to continue. Run `mestiere eject <name>` first, then edit.
 `.gitignore` exceptions; `mestiere untrack <name>` removes them. New hand-written skills in
 `.agents/skills/`, `.claude/skills/` or `.kiro/skills/` also need `track` before teammates get them.
 
-**Agents.** Edit `agents` in `skills.yaml` (supported: `claude`, `kiro`), then run
+**Agents.** Edit `agents` in `skills.yaml` (supported: `claude`, `kiro`, `cursor`, `codex`,
+`gemini`, `copilot`, `opencode`; only `claude` and `kiro` get links in a project, the others read
+`.agents/skills`), then run
 `mestiere sync` to add or remove the links.
 
 **Skills published for `npx skills`.** When the user wants skills from a repository made for
@@ -86,6 +88,18 @@ machine. They live in `~/.agents/skills/`, linked into the agents' folders under
 manifest at `~/.config/mestiere/skills.yaml`. `track`, `untrack` and `init` don't apply. Suggest
 global installs only for personal skills; skills the team relies on belong in the project.
 
+**Adopt a skill installed another way.** `mestiere adopt <name>` (add `-g` for a global
+skill) puts a hand-copied or third-party skill under mestiere when a configured registry
+publishes the same name and content. If it fails with `no configured registry publishes`,
+the skill stays the user's own; ask whether to add the registry that publishes it.
+
+**Clean up global skills.** Run `mestiere doctor -g` and read its `hint:` lines: unmanaged
+global skills, and how many characters each agent loads in every session. `mestiere status -g`
+shows each unmanaged skill as a copy, a link or a broken link. Propose a plan to the user,
+then `mestiere adopt -g <name>` the ones a registry publishes and, only with the user's
+approval, `mestiere prune -g <name>` the ones they don't want. Prune moves every copy and link
+to `~/.local/share/mestiere/trash`, so it can be undone; it always needs names from you.
+
 ## When something fails
 
 Run `mestiere doctor` and act on each `error:` line:
@@ -98,6 +112,8 @@ Run `mestiere doctor` and act on each `error:` line:
 | `comes from both <a> and <b>` | Add the skill to `exclude` in one of the registries |
 | `isn't reachable` | A git access problem; check the user's credentials for that URL |
 | `is committed but ignored` | Suggest `git rm -r --cached <path>`, or `mestiere track <name>` to keep committing it |
+| `<agent> loads ~/… instead of this project's <name>` | A global copy hides the project's locked version from that agent. Ask the user: remove the global one (`mestiere remove -g <name>`, or `mestiere prune -g <name>` if unmanaged) or rename one |
+| `has N separate copies` (with `-g`) | Suggest `mestiere adopt -g <name>` if a registry publishes it, otherwise keep one copy |
 
 After any change, commit `skills.yaml` (and `.gitignore` if it changed). Skill folders stay
 out of git unless tracked.

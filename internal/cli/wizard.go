@@ -16,8 +16,6 @@ import (
 	"github.com/polarity-dev/mestiere/internal/registry"
 )
 
-var agentLabels = map[string]string{"claude": "Claude Code", "kiro": "Kiro"}
-
 // initWizard walks a person through init: agents, a registry, skills. Each
 // step has a flag-driven equivalent, which agents and scripts use instead.
 func (a *app) initWizard(link string) error {
@@ -30,7 +28,10 @@ func (a *app) initWizard(link string) error {
 
 	var options []huh.Option[string]
 	for _, h := range agents.Harnesses() {
-		label := fmt.Sprintf("%-12s %s", agentLabels[h.ID], h.Dir)
+		if h.Dir == "" {
+			continue // reads .agents/skills, so it needs no links
+		}
+		label := fmt.Sprintf("%-12s %s", h.Name, h.Dir)
 		options = append(options, huh.NewOption(label, h.ID).Selected(hasAgentDir(root, h) || hasAgentDir(home, h)))
 	}
 	var ids []string

@@ -108,6 +108,13 @@ mestiere sync
 
 In CI, `mestiere sync --frozen` and `mestiere doctor --strict` fail on an inconsistent `skills.yaml` or drifted skills.
 
+Skills published for `npx skills` install the same way, such as the Next.js ones:
+
+```sh
+mestiere registry add next https://github.com/vercel/next.js
+mestiere add -r next next-dev-loop
+```
+
 ### In a registry
 
 A registry is its own git repository, with `registry.yaml` at the root:

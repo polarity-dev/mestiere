@@ -10,7 +10,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/polarity-dev/mestiere/internal/agents"
 	"github.com/polarity-dev/mestiere/internal/gitignore"
 	"github.com/polarity-dev/mestiere/internal/manifest"
 	"github.com/polarity-dev/mestiere/internal/naming"
@@ -177,11 +176,18 @@ func (p *Project) install(r *Report, reincluded []target, force bool) (*Report, 
 	if err := p.Save(); err != nil {
 		return nil, err
 	}
+	added := map[string]bool{}
 	for _, c := range changes {
 		r.Action("lock %s", c)
+		if c.Kind == Added {
+			added[c.Name] = true
+		}
 	}
 	sr, err := p.Sync(SyncOptions{Force: force})
 	r.Merge(sr)
+	if err == nil && len(added) > 0 {
+		p.warnShadows(r, added)
+	}
 	return r, err
 }
 
@@ -312,7 +318,7 @@ func (p *Project) uninstall(items []managed, r *Report, force bool) {
 				r.Warn("kept %s because it has local changes; it's now a local skill", p.rel(dir))
 			}
 		}
-		for _, a := range agents.Harnesses() {
+		for _, a := range p.linkHarnesses() {
 			dst := filepath.Join(p.agentDir(a), m.name)
 			info, err := os.Lstat(dst)
 			if err != nil {
@@ -413,7 +419,8 @@ func (p *Project) Eject(args []string, track bool) (*Report, error) {
 		}
 		delete(owner.Lock, name)
 		owner.Install = withoutSpec(owner, owner.Install, func(s naming.Spec) bool { return s == spec })
-		if !hasSpec(owner, owner.Exclude, spec) {
+		// Exclude keeps a namespace install from bringing the skill back; skills-layout registries have no namespaces.
+		if !owner.Flat() && !hasSpec(owner, owner.Exclude, spec) {
 			owner.Exclude = append(owner.Exclude, spec.String())
 		}
 		r.Action("eject %s; it's now a local skill", name)
@@ -460,9 +467,9 @@ func (p *Project) Track(args []string) (*Report, error) {
 			return r, err
 		}
 		var rels []string
-		for _, ag := range agents.Known() {
+		for _, ag := range p.linkAgents() {
 			if _, err := os.Lstat(filepath.Join(p.agentDir(ag), name)); err == nil {
-				rels = append(rels, path.Join(ag.Dir, name))
+				rels = append(rels, path.Join(p.linkRel(ag), name))
 			}
 		}
 		if len(rels) == 0 {
@@ -494,8 +501,8 @@ func (p *Project) Untrack(args []string) (*Report, error) {
 			return r, err
 		}
 		var rels []string
-		for _, ag := range agents.Known() {
-			rels = append(rels, path.Join(ag.Dir, name))
+		for _, ag := range p.linkAgents() {
+			rels = append(rels, path.Join(p.linkRel(ag), name))
 		}
 		removed, err := gitignore.Untrack(p.Root, rels)
 		if err != nil {
