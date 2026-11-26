@@ -19,6 +19,9 @@ safety rules before acting on an unfamiliar request.
    skills. If it reports `no skills.yaml found`, set the project up first (below).
 3. Never pass `--force` or delete skill folders without the user's explicit approval:
    both can destroy their local edits.
+4. Add `--no-input` to every command you run, for example `mestiere add --no-input frontend`.
+   Your shell may look like a terminal, and a prompt would block you. With it, a missing
+   argument fails at once with an error that names what to pass.
 
 ## Set up a project
 
@@ -42,8 +45,9 @@ skills indented under it, each marked when installed. Use it to pick skills that
 
 **Add skills.** `mestiere add <namespace>` installs a whole namespace and follows it on
 update. `mestiere add <namespace>/<skill>` installs one skill. Add `-r <registry>` when
-several registries are configured. Always pass targets: without them `add` opens an
-interactive picker you can't use.
+several registries are configured. Always pass targets: without them `add` is a picker for
+people. A `did you mean …?` error means a name was mistyped; confirm the suggestion matches
+what the user asked for before retrying.
 
 **Remove skills.** `mestiere remove <target>`. Removing one skill of an installed namespace
 adds it to `exclude` instead. Modified skills are kept and reported as local skills.
@@ -65,6 +69,13 @@ the next sync refuses to continue. Run `mestiere eject <name>` first, then edit.
 
 **Agents.** Edit `agents` in `skills.yaml` (supported: `claude`, `kiro`), then run
 `mestiere sync` to add or remove the links.
+
+**Skills published for `npx skills`.** When the user wants skills from a repository made for
+`npx skills`, such as Next.js, add it like any registry with its full git URL:
+`mestiere registry add next https://github.com/vercel/next.js`. mestiere detects the layout
+and writes `layout: skills`. Then `mestiere registry show next` and
+`mestiere add -r next <skill-name>`; names have no namespace. Don't run `npx skills` in a
+project managed by mestiere.
 
 **Add a registry.** `mestiere registry add <name> <git-url> [--ref <branch|tag|commit>]`.
 Access uses the user's git credentials, so first check `git ls-remote <url>` works.

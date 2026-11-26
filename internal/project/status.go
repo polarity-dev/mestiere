@@ -25,29 +25,29 @@ const (
 )
 
 type SkillStatus struct {
-	Name     string
-	Registry string
-	Commit   string
-	State    State
+	Name     string `json:"name"`
+	Registry string `json:"registry"`
+	Commit   string `json:"commit"`
+	State    State  `json:"state"`
 	// Links maps each configured harness ID to the state of its entry.
-	Links map[string]State
+	Links map[string]State `json:"links"`
 	// Committed is true when a .gitignore exception commits the skill.
-	Committed bool
+	Committed bool `json:"committed"`
 }
 
 // LocalSkill is a skill directory mestiere doesn't manage.
 type LocalSkill struct {
-	Name      string
-	Path      string
-	Committed bool
+	Name      string `json:"name"`
+	Path      string `json:"path"`
+	Committed bool   `json:"committed"`
 }
 
 type Status struct {
-	Drift  []string
-	Skills []SkillStatus
-	Local  []LocalSkill
+	Drift  []string      `json:"drift"`
+	Skills []SkillStatus `json:"skills"`
+	Local  []LocalSkill  `json:"local"`
 	// Global lists skills in the home-level agent directories; Committed is always false.
-	Global []LocalSkill
+	Global []LocalSkill `json:"global"`
 }
 
 func (p *Project) Status() (*Status, error) {

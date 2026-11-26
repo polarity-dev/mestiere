@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -201,6 +202,135 @@ func TestSummary(t *testing.T) {
 	} {
 		if got := summary(in, 72); got != want {
 			t.Errorf("summary(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestCompletionsAndSuggestions(t *testing.T) {
+	testutil.Isolate(t)
+	reg := testutil.NewRegistry(t)
+	reg.Skill("frontend", "forms", "v1")
+	reg.Skill("frontend", "tables", "v1")
+	reg.Commit("v1")
+	projectDir := filepath.Join(t.TempDir(), "app")
+	testutil.InitRepo(t, projectDir)
+	app := run{t: t, dir: projectDir}
+	app.ok("init", "--agents", "claude")
+	app.ok("registry", "add", "polarity", reg.Dir)
+	app.ok("add", "frontend/forms")
+
+	for args, want := range map[string]string{
+		"add fr":                 "frontend/tables",
+		"remove ":                "frontend-forms",
+		"eject ":                 "frontend-forms",
+		"registry show ":         "polarity",
+		"add -r ":                "polarity",
+		"init --agents c":        "claude",
+		"init --agents claude,k": "claude,kiro",
+	} {
+		words := append([]string{"__complete"}, strings.Fields(args)...)
+		if strings.HasSuffix(args, " ") {
+			words = append(words, "")
+		}
+		if out := app.ok(words...); !strings.Contains(out, want) {
+			t.Errorf("completing %q: want %q in\n%s", args, want, out)
+		}
+	}
+
+	for args, want := range map[string]string{
+		"add frontned":            "did you mean frontend?",
+		"add frontend/form":       "did you mean frontend/forms?",
+		"remove frontend-form":    "did you mean frontend-forms?",
+		"add --regsitry x a":      "did you mean --registry?",
+		"init -g":                 "has no global form",
+		"track -g frontend-forms": "has no global form",
+	} {
+		_, _, err := app.exec(strings.Fields(args)...)
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("mestiere %s: err = %v, want %q", args, err, want)
+		}
+	}
+
+	if out := app.ok("ls"); !strings.Contains(out, "frontend-forms") {
+		t.Fatalf("ls:\n%s", out)
+	}
+	app.ok("rm", "frontend/forms")
+}
+
+func TestOutputModes(t *testing.T) {
+	testutil.Isolate(t)
+	reg := testutil.NewRegistry(t)
+	reg.Skill("frontend", "forms", "v1")
+	reg.Commit("v1")
+	projectDir := filepath.Join(t.TempDir(), "app")
+	testutil.InitRepo(t, projectDir)
+	app := run{t: t, dir: projectDir}
+	app.ok("init", "--agents", "claude")
+	app.ok("registry", "add", "polarity", reg.Dir)
+
+	person := func(args ...string) (string, string, error) {
+		var out, errOut bytes.Buffer
+		cmd := NewRootCmd(&out, &errOut, true)
+		cmd.SetArgs(append([]string{"-C", projectDir}, args...))
+		err := cmd.Execute()
+		return out.String(), errOut.String(), err
+	}
+	out, _, err := person("add", "frontend/forms")
+	if err != nil || !strings.Contains(out, "✓ install") {
+		t.Fatalf("styled add: %v\n%s", err, out)
+	}
+	if out, _, _ := person("status"); !strings.Contains(out, "Registry skills") || !strings.Contains(out, "✓ frontend-forms") {
+		t.Fatalf("styled status:\n%s", out)
+	}
+	if _, _, err := person("add", "--no-input"); err == nil || !strings.Contains(err.Error(), "registry show") {
+		t.Fatalf("--no-input add without targets: %v", err)
+	}
+
+	for _, args := range [][]string{{"status"}, {"registry", "show"}, {"outdated"}, {"doctor"}, {"sync"}} {
+		out, errOut, _ := app.exec(args...)
+		if strings.ContainsAny(out+errOut, "\x1b✓⚠✗") {
+			t.Errorf("plain %v has styling:\n%s%s", args, out, errOut)
+		}
+	}
+
+	var st struct {
+		Managed bool `json:"managed"`
+		Skills  []struct {
+			Name  string `json:"name"`
+			State string `json:"state"`
+		} `json:"skills"`
+	}
+	if err := json.Unmarshal([]byte(app.ok("status", "--json")), &st); err != nil || !st.Managed || len(st.Skills) != 1 || st.Skills[0].State != "ok" {
+		t.Fatalf("status --json = %+v, %v", st, err)
+	}
+	var l struct {
+		Namespaces []struct {
+			Skills []struct {
+				Name      string `json:"name"`
+				Installed bool   `json:"installed"`
+			} `json:"skills"`
+		} `json:"namespaces"`
+	}
+	if err := json.Unmarshal([]byte(app.ok("registry", "show", "--json")), &l); err != nil || l.Namespaces[0].Skills[0].Name != "frontend/forms" || !l.Namespaces[0].Skills[0].Installed {
+		t.Fatalf("registry show --json = %+v, %v", l, err)
+	}
+	if out := strings.TrimSpace(app.ok("outdated", "--json")); out != "[]" {
+		t.Fatalf("outdated --json = %s", out)
+	}
+	if out := app.ok("doctor", "--json", "--offline"); !strings.Contains(out, `"ok": true`) {
+		t.Fatalf("doctor --json = %s", out)
+	}
+}
+
+func TestRegistryName(t *testing.T) {
+	for url, want := range map[string]string{
+		"git@github.com:acme/team-skills.git": "team-skills",
+		"https://github.com/acme/Skills/":     "skills",
+		"../local.repo":                       "local-repo",
+		"":                                    "skills",
+	} {
+		if got := registryName(url); got != want {
+			t.Errorf("registryName(%q) = %q, want %q", url, got, want)
 		}
 	}
 }

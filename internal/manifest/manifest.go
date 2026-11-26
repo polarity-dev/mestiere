@@ -28,10 +28,15 @@ type LockEntry struct {
 	Tree   string `yaml:"tree"`
 }
 
+// LayoutSkills marks a registry laid out for vercel/skills: skills/<name>/SKILL.md
+// with no registry.yaml and no namespaces. Skills install under their plain name.
+const LayoutSkills = "skills"
+
 type Registry struct {
 	Name    string
 	URL     string
 	Ref     string
+	Layout  string
 	Install []string
 	Exclude []string
 	Lock    map[string]LockEntry
@@ -50,6 +55,7 @@ type Manifest struct {
 type rawRegistry struct {
 	URL     string               `yaml:"url"`
 	Ref     string               `yaml:"ref"`
+	Layout  string               `yaml:"layout"`
 	Install []string             `yaml:"install"`
 	Exclude []string             `yaml:"exclude"`
 	Lock    map[string]LockEntry `yaml:"lock"`
@@ -136,7 +142,7 @@ func (m *Manifest) decodeRegistries(node *yaml.Node) error {
 			raw.Lock = map[string]LockEntry{}
 		}
 		m.Registries = append(m.Registries, &Registry{
-			Name: name, URL: raw.URL, Ref: raw.Ref,
+			Name: name, URL: raw.URL, Ref: raw.Ref, Layout: raw.Layout,
 			Install: raw.Install, Exclude: raw.Exclude, Lock: raw.Lock,
 		})
 	}
@@ -163,6 +169,9 @@ func (m *Manifest) RemoveRegistry(name string) bool {
 }
 
 // Clone returns a deep copy, used to compute changes without touching the original.
+// Flat reports whether the registry uses the vercel/skills layout.
+func (r *Registry) Flat() bool { return r.Layout == LayoutSkills }
+
 func (r *Registry) Clone() *Registry {
 	c := *r
 	c.Install = append([]string(nil), r.Install...)
@@ -219,6 +228,7 @@ func (m *Manifest) registriesNode(old *yaml.Node) *yaml.Node {
 		valueNode.Style = 0
 		setKey(valueNode, "url", encode(reg.URL))
 		setOptional(valueNode, "ref", reg.Ref != "", reg.Ref)
+		setOptional(valueNode, "layout", reg.Layout != "", reg.Layout)
 		setKey(valueNode, "install", encode(nonNil(reg.Install)))
 		setOptional(valueNode, "exclude", len(reg.Exclude) > 0, reg.Exclude)
 		if len(reg.Lock) > 0 {

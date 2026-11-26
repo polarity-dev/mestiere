@@ -43,7 +43,7 @@ These are the product. Don't weaken them to make a change easier.
 
 ## Conventions
 
-- Keep dependencies to the current set (cobra, huh, yaml.v3). Ask before adding one.
+- Keep dependencies to the current set (cobra, huh, lipgloss, yaml.v3). Ask before adding one.
 - Tests that touch git or the filesystem call `testutil.Isolate(t)` first, so they never read the developer's git config, cache or home-level skills. Build registries with `testutil.NewRegistry`, not fixtures on disk.
 - Prefer integration-style tests that drive real git repos over mocks.
 - Comments explain why, not what. A known limitation gets `// shortcut: <limit>, <when to upgrade>`.

@@ -82,3 +82,19 @@ func TestCovers(t *testing.T) {
 		t.Fatal("unexpected Covers result")
 	}
 }
+
+func TestClosest(t *testing.T) {
+	cands := []string{"frontend", "backend", "frontend-forms"}
+	for in, want := range map[string]string{
+		"frontned":      "frontend",
+		"bakend":        "backend",
+		"frontend-form": "frontend-forms",
+		"ops":           "",
+		"frontend":      "frontend",
+	} {
+		got, ok := Closest(in, cands)
+		if got != want || ok != (want != "") {
+			t.Errorf("Closest(%q) = %q, %v; want %q", in, got, ok, want)
+		}
+	}
+}

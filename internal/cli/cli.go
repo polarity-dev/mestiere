@@ -13,9 +13,11 @@ import (
 
 	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
 	"github.com/polarity-dev/mestiere/internal/agents"
 	"github.com/polarity-dev/mestiere/internal/authoring"
+	"github.com/polarity-dev/mestiere/internal/gitx"
 	"github.com/polarity-dev/mestiere/internal/manifest"
 	"github.com/polarity-dev/mestiere/internal/naming"
 	"github.com/polarity-dev/mestiere/internal/project"
@@ -41,49 +43,139 @@ func version() string {
 var ErrFailed = errors.New("failed")
 
 type app struct {
-	dir    string
-	quiet  bool
-	global bool
-	out    io.Writer
-	err    io.Writer
-	// interactive is false in tests and when stdin isn't a terminal.
+	dir     string
+	quiet   bool
+	global  bool
+	noInput bool
+	out     io.Writer
+	err     io.Writer
+	// interactive is false in tests, without a terminal, in CI and in agent shells.
 	interactive bool
+	// spinners is true when stderr is a terminal that can redraw a line.
+	spinners bool
+	st       *styles
+}
+
+// human reports whether a person is at the terminal: only then does mestiere
+// prompt, or shorten output to fit the screen.
+func (a *app) human() bool { return a.interactive && !a.noInput }
+
+// globalCommands are the commands that accept -g, listed in flag errors.
+var globalCommands = "add, remove, sync, update, outdated, status, doctor, eject and the registry add, remove, list and show subcommands"
+
+// scoped gives cmd the -g flag. It is per command, not on the root, so commands
+// without a global meaning reject it instead of ignoring it.
+func (a *app) scoped(cmd *cobra.Command) *cobra.Command {
+	cmd.Flags().BoolVarP(&a.global, "global", "g", false, "act on the skills installed for every project in your home directory")
+	return cmd
 }
 
 func NewRootCmd(out, errOut io.Writer, interactive bool) *cobra.Command {
+	return newApp(out, errOut, interactive).rootCmd()
+}
+
+func newApp(out, errOut io.Writer, interactive bool) *app {
 	a := &app{out: out, err: errOut, interactive: interactive}
+	if f, ok := errOut.(*os.File); ok {
+		a.spinners = isTerminal(f)
+	}
+	return a
+}
+
+func (a *app) rootCmd() *cobra.Command {
+	out, errOut := a.out, a.err
 	root := &cobra.Command{
 		Use:           "mestiere",
 		Short:         "Install agent skills from git registries",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Version:       version(),
+		PersistentPreRun: func(*cobra.Command, []string) {
+			if !a.human() {
+				// Git would otherwise ask for a password or passphrase on the terminal and block agents.
+				setDefaultEnv("GIT_TERMINAL_PROMPT", "0")
+				// GIT_SSH_COMMAND outranks core.sshCommand, so only set it when the user has neither.
+				if cmd, _ := gitx.Run(a.dir, "config", "--get", "core.sshCommand"); cmd == "" {
+					setDefaultEnv("GIT_SSH_COMMAND", "ssh -o BatchMode=yes")
+				}
+			}
+		},
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			a.printBanner("Agent skills from git registries, locked like dependencies.")
+			return cmd.Help()
+		},
 	}
 	root.SetOut(out)
 	root.SetErr(errOut)
 	root.PersistentFlags().StringVarP(&a.dir, "dir", "C", ".", "run as if started in this directory")
 	root.PersistentFlags().BoolVarP(&a.quiet, "quiet", "q", false, "only print warnings and errors")
-	root.PersistentFlags().BoolVarP(&a.global, "global", "g", false, "act on the skills installed for every project in your home directory")
+	root.PersistentFlags().BoolVar(&a.noInput, "no-input", false, "never prompt; fail with a hint when an argument is missing (for agents and scripts)")
+	root.SetFlagErrorFunc(flagError)
 	root.AddCommand(
-		a.initCmd(), a.registryCmd(), a.addCmd(), a.removeCmd(), a.syncCmd(),
-		a.updateCmd(), a.outdatedCmd(), a.statusCmd(), a.trackCmd(), a.untrackCmd(),
-		a.ejectCmd(), a.doctorCmd(), a.cacheCmd(),
+		a.initCmd(), a.registryCmd(), a.scoped(a.addCmd()), a.scoped(a.removeCmd()), a.scoped(a.syncCmd()),
+		a.scoped(a.updateCmd()), a.scoped(a.outdatedCmd()), a.scoped(a.statusCmd()), a.trackCmd(), a.untrackCmd(),
+		a.scoped(a.ejectCmd()), a.scoped(a.doctorCmd()), a.cacheCmd(),
 	)
 	return root
 }
+
+// flagError adds a suggestion to pflag's unknown-flag errors, which Cobra
+// doesn't make on its own.
+func flagError(cmd *cobra.Command, err error) error {
+	msg := err.Error()
+	name, long := strings.CutPrefix(msg, "unknown flag: --")
+	if !long {
+		short, ok := strings.CutPrefix(msg, "unknown shorthand flag: '")
+		if !ok || short == "" {
+			return err
+		}
+		name = short[:1]
+	}
+	if name == "global" || name == "g" {
+		return fmt.Errorf("`%s` has no global form; -g works with %s", cmd.CommandPath(), globalCommands)
+	}
+	if !long {
+		return err
+	}
+	var names []string
+	for _, fs := range []*pflag.FlagSet{cmd.Flags(), cmd.InheritedFlags()} {
+		fs.VisitAll(func(f *pflag.Flag) { names = append(names, f.Name) })
+	}
+	if c, ok := naming.Closest(name, names); ok {
+		return fmt.Errorf("%s; did you mean --%s?", msg, c)
+	}
+	return err
+}
+
+// noInputEnv turns prompts off for the whole process.
+const noInputEnv = "MESTIERE_NO_INPUT"
 
 // Execute runs the CLI and returns the process exit code.
 func Execute() int {
 	notify := startUpdateCheck(version(), os.Stderr)
 	defer notify()
-	root := NewRootCmd(os.Stdout, os.Stderr, isTerminal(os.Stdin) && isTerminal(os.Stdout))
-	if err := root.Execute(); err != nil {
-		if !errors.Is(err, ErrFailed) {
+	interactive := isTerminal(os.Stdin) && isTerminal(os.Stdout) &&
+		os.Getenv("CI") == "" && os.Getenv(noInputEnv) == "" && !agents.InAgentShell(os.Getenv)
+	a := newApp(os.Stdout, os.Stderr, interactive)
+	if err := a.rootCmd().Execute(); err != nil {
+		switch {
+		case errors.Is(err, ErrFailed):
+		case errors.Is(err, huh.ErrUserAborted):
+			fmt.Fprintln(os.Stderr, "cancelled")
+		case a.human():
+			fmt.Fprintln(os.Stderr, a.style().bad.Render("✗ "+err.Error()))
+		default:
 			fmt.Fprintf(os.Stderr, "mestiere: %v\n", err)
 		}
 		return 1
 	}
 	return 0
+}
+
+func setDefaultEnv(key, value string) {
+	if _, ok := os.LookupEnv(key); !ok {
+		_ = os.Setenv(key, value)
+	}
 }
 
 func isTerminal(f *os.File) bool {
@@ -108,16 +200,16 @@ func (a *app) printf(format string, args ...any) {
 func (a *app) report(r *project.Report, err error) error {
 	if r != nil {
 		for _, s := range r.Actions {
-			a.printf("  %s\n", s)
+			a.printf("%s\n", a.action(s))
 		}
 		for _, s := range r.Warnings {
-			fmt.Fprintf(a.err, "warning: %s\n", s)
+			fmt.Fprintln(a.err, a.warnLine(s))
 		}
 		for _, s := range r.Problems {
-			fmt.Fprintf(a.err, "error: %s\n", s)
+			fmt.Fprintln(a.err, a.errorLine(s))
 		}
 		for _, s := range r.Hints {
-			a.printf("hint: %s\n", s)
+			a.printf("%s\n", a.hintLine(s))
 		}
 	}
 	if err != nil {
@@ -136,9 +228,6 @@ func (a *app) initCmd() *cobra.Command {
 		Short: "Create skills.yaml and the .gitignore rule",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if a.global {
-				return errors.New("global skills need no init; run `mestiere add -g <namespace>` directly")
-			}
 			var ids []string
 			switch {
 			case cmd.Flags().Changed("agents"):
@@ -146,16 +235,8 @@ func (a *app) initCmd() *cobra.Command {
 				if ids == nil {
 					ids = []string{}
 				}
-			case a.interactive:
-				if err := huh.NewMultiSelect[string]().
-					Title("Which agents should receive skills? (.agents is always included)").
-					Options(huh.NewOptions(agents.HarnessIDs()...)...).
-					Value(&ids).Run(); err != nil {
-					return err
-				}
-				if ids == nil {
-					ids = []string{}
-				}
+			case a.human():
+				return a.initWizard(link)
 			}
 			_, r, err := project.Init(a.dir, ids, link)
 			return a.report(r, err)
@@ -163,6 +244,8 @@ func (a *app) initCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&agentList, "agents", "", fmt.Sprintf("comma-separated agents (%s)", strings.Join(agents.HarnessIDs(), ", ")))
 	cmd.Flags().StringVar(&link, "link", "", "how agents get skills: symlink (default) or copy")
+	_ = cmd.RegisterFlagCompletionFunc("agents", completeAgents)
+	_ = cmd.RegisterFlagCompletionFunc("link", cobra.FixedCompletions([]string{project.LinkSymlink, project.LinkCopy}, cobra.ShellCompDirectiveNoFileComp))
 	return cmd
 }
 
@@ -197,7 +280,7 @@ func (a *app) registryCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return a.report(p.RemoveRegistry(args[0], force))
+			return a.report(a.working("Removing the registry", func() (*project.Report, error) { return p.RemoveRegistry(args[0], force) }))
 		},
 	}
 	remove.Flags().BoolVar(&force, "force", false, "also delete skills with local changes")
@@ -222,6 +305,7 @@ func (a *app) registryCmd() *cobra.Command {
 		},
 	}
 
+	var showJSON bool
 	show := &cobra.Command{
 		Use:   "show [name]",
 		Short: "List the namespaces and skills a registry offers",
@@ -235,34 +319,18 @@ func (a *app) registryCmd() *cobra.Command {
 			if len(args) == 1 {
 				name = args[0]
 			}
-			l, err := p.Browse(name)
-			if err != nil {
+			var l *project.Listing
+			if err := a.busy("Reading the registry", func() (err error) { l, err = p.Browse(name); return }); err != nil {
 				return err
 			}
-			fmt.Fprintf(a.out, "%s at %s\n", l.Registry, registry.Short(l.Commit))
-			if len(l.Namespaces) == 0 {
-				fmt.Fprintln(a.out, "  no skills")
+			if showJSON {
+				return a.printJSON(l)
 			}
-			row := func(name string, installed bool, desc string) {
-				mark := ""
-				if installed {
-					mark = "installed"
-				}
-				// Agents read show through a pipe and need the whole description to pick skills.
-				if a.interactive {
-					desc = summary(desc, 72)
-				}
-				fmt.Fprintf(a.out, "%-42s %-10s %s\n", name, mark, desc)
-			}
-			for _, n := range l.Namespaces {
-				row(n.Name, n.Installed, n.Description)
-				for _, s := range n.Skills {
-					row("  "+s.Spec.String(), s.Installed, s.Description)
-				}
-			}
+			a.showListing(l)
 			return nil
 		},
 	}
+	show.Flags().BoolVar(&showJSON, "json", false, "print the listing as JSON")
 
 	var regName, description string
 	initReg := &cobra.Command{
@@ -336,8 +404,53 @@ func (a *app) registryCmd() *cobra.Command {
 	}
 	newSkill.Flags().StringVar(&skillDescription, "description", "", "skill description")
 
-	cmd.AddCommand(add, remove, list, show, initReg, lint, newNamespace, newSkill)
+	remove.ValidArgsFunction = a.completeRegistryArg
+	show.ValidArgsFunction = a.completeRegistryArg
+	cmd.AddCommand(a.scoped(add), a.scoped(remove), a.scoped(list), a.scoped(show), initReg, lint, newNamespace, newSkill)
 	return cmd
+}
+
+func (a *app) showListing(l *project.Listing) {
+	st := a.style()
+	if a.human() {
+		fmt.Fprintf(a.out, "%s %s\n", st.bold.Render(l.Registry), st.faint.Render("at "+registry.Short(l.Commit)))
+	} else {
+		fmt.Fprintf(a.out, "%s at %s\n", l.Registry, registry.Short(l.Commit))
+	}
+	if len(l.Namespaces) == 0 {
+		fmt.Fprintln(a.out, "  no skills")
+	}
+	row := func(name string, namespace, installed bool, desc string) {
+		if !a.human() {
+			// Agents need the whole description to pick skills.
+			mark := ""
+			if installed {
+				mark = "installed"
+			}
+			fmt.Fprintf(a.out, "%-42s %-10s %s\n", name, mark, desc)
+			return
+		}
+		mark := " "
+		if installed {
+			mark = "✓"
+		}
+		label := fmt.Sprintf("%-40s", name)
+		if namespace {
+			label = st.bold.Render(label)
+		}
+		fmt.Fprintf(a.out, "%s %s %s\n", mark, label, st.faint.Render(summary(desc, 72)))
+	}
+	for _, n := range l.Namespaces {
+		indent := ""
+		// Plain skills, from a registry with the vercel/skills layout, have no namespace row.
+		if n.Name != "" {
+			row(n.Name, true, n.Installed, n.Description)
+			indent = "  "
+		}
+		for _, s := range n.Skills {
+			row(indent+s.Spec.String(), false, s.Installed, s.Description)
+		}
+	}
 }
 
 // authorDir resolves the registry directory for authoring commands, which
@@ -364,23 +477,30 @@ func (a *app) addCmd() *cobra.Command {
 				return err
 			}
 			if len(args) == 0 {
-				if !a.interactive {
-					return errors.New("name at least one namespace or skill to add")
+				if !a.human() {
+					show := "mestiere registry show"
+					if a.global {
+						show += " -g"
+					}
+					return fmt.Errorf("name at least one namespace or skill to add; `%s` lists them", show)
 				}
 				if args, err = a.pick(p, regName); err != nil {
 					return err
 				}
 			}
-			return a.report(p.Add(regName, args, force))
+			return a.report(a.working("Installing skills", func() (*project.Report, error) { return p.Add(regName, args, force) }))
 		},
 	}
 	cmd.Flags().StringVarP(&regName, "registry", "r", "", "registry to install from (required when several are configured)")
 	cmd.Flags().BoolVar(&force, "force", false, "overwrite existing directories with the same name")
+	cmd.ValidArgsFunction = a.completeOffered(&regName)
+	_ = cmd.RegisterFlagCompletionFunc("registry", a.completeRegistries)
 	return cmd
 }
 
 func (a *app) pick(p *project.Project, regName string) ([]string, error) {
-	l, err := p.Browse(regName)
+	var l *project.Listing
+	err := a.busy("Reading the registry", func() (err error) { l, err = p.Browse(regName); return })
 	if err != nil {
 		return nil, err
 	}
@@ -392,9 +512,13 @@ func (a *app) pick(p *project.Project, regName string) ([]string, error) {
 		return fmt.Sprintf("%-30s %s", name, summary(desc, 72))
 	}
 	for _, n := range l.Namespaces {
-		options = append(options, huh.NewOption(label(n.Name, n.Installed, n.Description), n.Name))
+		indent := ""
+		if n.Name != "" {
+			options = append(options, huh.NewOption(label(n.Name, n.Installed, n.Description), n.Name))
+			indent = "    "
+		}
 		for _, s := range n.Skills {
-			options = append(options, huh.NewOption(label("    "+s.Spec.Skill, s.Installed, s.Description), s.Spec.String()))
+			options = append(options, huh.NewOption(label(indent+s.Spec.Skill, s.Installed, s.Description), s.Spec.String()))
 		}
 	}
 	if len(options) == 0 {
@@ -403,13 +527,13 @@ func (a *app) pick(p *project.Project, regName string) ([]string, error) {
 	var picked []string
 	err = huh.NewMultiSelect[string]().
 		Title("Select skills to install from " + l.Registry).
-		Description("Pick a namespace to install all of it and follow it on update, or single skills under it.").
-		Options(options...).Value(&picked).Run()
+		Description("A namespace installs all of it and follows it on update.\nspace selects · / filters · enter installs").
+		Options(options...).Value(&picked).Filterable(true).Height(min(len(options)+4, 20)).Run()
 	if err != nil {
 		return nil, err
 	}
 	if len(picked) == 0 {
-		return nil, errors.New("nothing selected")
+		return nil, errNoSelection
 	}
 	return picked, nil
 }
@@ -417,15 +541,17 @@ func (a *app) pick(p *project.Project, regName string) ([]string, error) {
 func (a *app) removeCmd() *cobra.Command {
 	var force bool
 	cmd := &cobra.Command{
-		Use:   "remove <namespace | namespace/skill>...",
-		Short: "Uninstall namespaces or skills",
-		Args:  cobra.MinimumNArgs(1),
+		Use:               "remove <namespace | namespace/skill>...",
+		Aliases:           []string{"rm", "uninstall"},
+		Short:             "Uninstall namespaces or skills",
+		Args:              cobra.MinimumNArgs(1),
+		ValidArgsFunction: a.completeInstalled,
 		RunE: func(_ *cobra.Command, args []string) error {
 			p, err := a.open()
 			if err != nil {
 				return err
 			}
-			return a.report(p.Remove(args, force))
+			return a.report(a.working("Removing skills", func() (*project.Report, error) { return p.Remove(args, force) }))
 		},
 	}
 	cmd.Flags().BoolVar(&force, "force", false, "also delete skills with local changes")
@@ -435,15 +561,16 @@ func (a *app) removeCmd() *cobra.Command {
 func (a *app) syncCmd() *cobra.Command {
 	var opts project.SyncOptions
 	cmd := &cobra.Command{
-		Use:   "sync",
-		Short: "Make installed skills match skills.yaml",
-		Args:  cobra.NoArgs,
+		Use:     "sync",
+		Aliases: []string{"install"},
+		Short:   "Make installed skills match skills.yaml",
+		Args:    cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			p, err := a.open()
 			if err != nil {
 				return err
 			}
-			return a.report(p.Sync(opts))
+			return a.report(a.working("Syncing skills", func() (*project.Report, error) { return p.Sync(opts) }))
 		},
 	}
 	cmd.Flags().BoolVar(&opts.Frozen, "frozen", false, "fail if install and lock disagree instead of re-resolving (for CI)")
@@ -455,15 +582,21 @@ func (a *app) syncCmd() *cobra.Command {
 func (a *app) updateCmd() *cobra.Command {
 	var force bool
 	cmd := &cobra.Command{
-		Use:   "update [target]...",
-		Short: "Move locked skills to the latest registry version",
-		Long:  "Targets are namespaces, skills, or registry-qualified forms like polarity:frontend. Without targets everything is updated.",
+		Use:               "update [target]...",
+		Aliases:           []string{"upgrade"},
+		ValidArgsFunction: a.completeInstalled,
+		Short:             "Move locked skills to the latest registry version",
+		Long:              "Targets are namespaces, skills, or registry-qualified forms like polarity:frontend. Without targets everything is updated.",
 		RunE: func(_ *cobra.Command, args []string) error {
 			p, err := a.open()
 			if err != nil {
 				return err
 			}
-			changes, r, err := p.Update(args, force)
+			var changes []project.Change
+			r, err := a.working("Updating skills", func() (r *project.Report, err error) {
+				changes, r, err = p.Update(args, force)
+				return
+			})
 			for _, c := range changes {
 				a.printf("  %s\n", c)
 			}
@@ -478,7 +611,8 @@ func (a *app) updateCmd() *cobra.Command {
 }
 
 func (a *app) outdatedCmd() *cobra.Command {
-	return &cobra.Command{
+	var asJSON bool
+	cmd := &cobra.Command{
 		Use:   "outdated",
 		Short: "Show skills whose content changed in their registry",
 		Args:  cobra.NoArgs,
@@ -487,9 +621,12 @@ func (a *app) outdatedCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			changes, err := p.Outdated()
-			if err != nil {
+			var changes []project.Change
+			if err := a.busy("Checking registries", func() (err error) { changes, err = p.Outdated(); return }); err != nil {
 				return err
+			}
+			if asJSON {
+				return a.printJSON(nonNil(changes))
 			}
 			if len(changes) == 0 {
 				fmt.Fprintln(a.out, "everything is up to date")
@@ -500,13 +637,25 @@ func (a *app) outdatedCmd() *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&asJSON, "json", false, "print the changes as JSON")
+	return cmd
+}
+
+// statusJSON is the --json form of status.
+type statusJSON struct {
+	Root    string `json:"root"`
+	Managed bool   `json:"managed"`
+	Global  bool   `json:"global"`
+	*project.Status
 }
 
 func (a *app) statusCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "status",
-		Short: "Show installed, local and global skills",
-		Args:  cobra.NoArgs,
+	var asJSON bool
+	cmd := &cobra.Command{
+		Use:     "status",
+		Aliases: []string{"ls", "list"},
+		Short:   "Show installed, local and global skills",
+		Args:    cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			p, err := a.open()
 			managed := err == nil
@@ -520,59 +669,91 @@ func (a *app) statusCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			for _, d := range st.Drift {
-				fmt.Fprintf(a.out, "drift: %s (run `mestiere sync`)\n", d)
+			if asJSON {
+				return a.printJSON(statusJSON{Root: p.Root, Managed: managed, Global: p.Global, Status: st})
 			}
-			switch {
-			case !managed:
-				fmt.Fprintf(a.out, "no %s found (run `mestiere init` to manage skills in %s)\n", manifest.FileName, p.Root)
-			case len(st.Skills) == 0:
-				fmt.Fprintln(a.out, "no registry skills installed")
-			}
-			for _, s := range st.Skills {
-				var links []string
-				for _, id := range sortedKeys(s.Links) {
-					links = append(links, id+":"+string(s.Links[id]))
-				}
-				committed := ""
-				if s.Committed {
-					committed = "  committed"
-				}
-				fmt.Fprintf(a.out, "%-40s %-10s %s@%s  %s%s\n", s.Name, s.State, s.Registry, registry.Short(s.Commit), strings.Join(links, " "), committed)
-			}
-			if len(st.Local) > 0 {
-				fmt.Fprintln(a.out, "\nlocal skills:")
-				for _, l := range st.Local {
-					if p.Global {
-						fmt.Fprintf(a.out, "  ~/%s\n", l.Path)
-						continue
-					}
-					state := "not committed"
-					if managed {
-						state += " (run `mestiere track " + l.Name + "`)"
-					}
-					if l.Committed {
-						state = "committed"
-					}
-					fmt.Fprintf(a.out, "  %-40s %s\n", l.Path, state)
-				}
-			}
-			if len(st.Global) > 0 {
-				fmt.Fprintln(a.out, "\nglobal skills:")
-				for _, g := range st.Global {
-					fmt.Fprintf(a.out, "  %s\n", g.Path)
-				}
-			}
+			a.showStatus(p, st, managed)
 			return nil
 		},
+	}
+	cmd.Flags().BoolVar(&asJSON, "json", false, "print the status as JSON")
+	return cmd
+}
+
+func (a *app) showStatus(p *project.Project, st *project.Status, managed bool) {
+	stl := a.style()
+	for _, d := range st.Drift {
+		line := fmt.Sprintf("drift: %s (run `mestiere sync`)", d)
+		if a.human() {
+			line = stl.warn.Render("⚠ " + line)
+		}
+		fmt.Fprintln(a.out, line)
+	}
+	switch {
+	case !managed:
+		fmt.Fprintf(a.out, "no %s found (run `mestiere init` to manage skills in %s)\n", manifest.FileName, p.Root)
+	case len(st.Skills) == 0:
+		fmt.Fprintln(a.out, "no registry skills installed")
+	}
+	if len(st.Skills) > 0 && a.human() {
+		fmt.Fprintln(a.out, stl.bold.Render("Registry skills"))
+	}
+	for _, s := range st.Skills {
+		var links []string
+		for _, id := range sortedKeys(s.Links) {
+			links = append(links, id+":"+string(s.Links[id]))
+		}
+		committed := ""
+		if s.Committed {
+			committed = "  committed"
+		}
+		if !a.human() {
+			fmt.Fprintf(a.out, "%-40s %-10s %s@%s  %s%s\n", s.Name, s.State, s.Registry, registry.Short(s.Commit), strings.Join(links, " "), committed)
+			continue
+		}
+		mark, state := stl.ok.Render("✓"), fmt.Sprintf("%-10s", s.State)
+		if s.State != project.StateOK {
+			mark, state = stl.warn.Render("⚠"), stl.warn.Render(state)
+		}
+		fmt.Fprintf(a.out, "  %s %-40s %s %s\n", mark, s.Name, state,
+			stl.faint.Render(fmt.Sprintf("%s@%s  %s%s", s.Registry, registry.Short(s.Commit), strings.Join(links, " "), committed)))
+	}
+	if len(st.Local) > 0 {
+		fmt.Fprintln(a.out)
+		a.heading("local skills:", "Local skills")
+		for _, l := range st.Local {
+			if p.Global {
+				fmt.Fprintf(a.out, "  ~/%s\n", l.Path)
+				continue
+			}
+			state := "not committed"
+			if managed {
+				state += " (run `mestiere track " + l.Name + "`)"
+			}
+			if l.Committed {
+				state = "committed"
+			}
+			if a.human() {
+				state = stl.faint.Render(state)
+			}
+			fmt.Fprintf(a.out, "  %-40s %s\n", l.Path, state)
+		}
+	}
+	if len(st.Global) > 0 {
+		fmt.Fprintln(a.out)
+		a.heading("global skills:", "Global skills")
+		for _, g := range st.Global {
+			fmt.Fprintf(a.out, "  %s\n", g.Path)
+		}
 	}
 }
 
 func (a *app) trackCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "track <skill>...",
-		Short: "Commit a skill by adding a .gitignore exception",
-		Args:  cobra.MinimumNArgs(1),
+		Use:               "track <skill>...",
+		Short:             "Commit a skill by adding a .gitignore exception",
+		Args:              cobra.MinimumNArgs(1),
+		ValidArgsFunction: a.completeSkillFolders,
 		RunE: func(_ *cobra.Command, args []string) error {
 			p, err := a.open()
 			if err != nil {
@@ -585,9 +766,10 @@ func (a *app) trackCmd() *cobra.Command {
 
 func (a *app) untrackCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "untrack <skill>...",
-		Short: "Remove a skill's .gitignore exception",
-		Args:  cobra.MinimumNArgs(1),
+		Use:               "untrack <skill>...",
+		Short:             "Remove a skill's .gitignore exception",
+		Args:              cobra.MinimumNArgs(1),
+		ValidArgsFunction: a.completeSkillFolders,
 		RunE: func(_ *cobra.Command, args []string) error {
 			p, err := a.open()
 			if err != nil {
@@ -601,9 +783,10 @@ func (a *app) untrackCmd() *cobra.Command {
 func (a *app) ejectCmd() *cobra.Command {
 	var track bool
 	cmd := &cobra.Command{
-		Use:   "eject <skill>...",
-		Short: "Keep an installed skill as a local skill that mestiere no longer manages",
-		Args:  cobra.MinimumNArgs(1),
+		Use:               "eject <skill>...",
+		Short:             "Keep an installed skill as a local skill that mestiere no longer manages",
+		Args:              cobra.MinimumNArgs(1),
+		ValidArgsFunction: a.completeLocked,
 		RunE: func(_ *cobra.Command, args []string) error {
 			p, err := a.open()
 			if err != nil {
@@ -616,8 +799,15 @@ func (a *app) ejectCmd() *cobra.Command {
 	return cmd
 }
 
+type doctorJSON struct {
+	OK       bool     `json:"ok"`
+	Problems []string `json:"problems"`
+	Warnings []string `json:"warnings"`
+}
+
 func (a *app) doctorCmd() *cobra.Command {
 	var opts project.DoctorOptions
+	var asJSON bool
 	cmd := &cobra.Command{
 		Use:   "doctor",
 		Short: "Check the project without changing anything",
@@ -627,13 +817,28 @@ func (a *app) doctorCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := a.report(p.Doctor(opts)); err != nil {
+			r, err := a.working("Checking the project", func() (*project.Report, error) { return p.Doctor(opts) })
+			if asJSON && err == nil {
+				if err := a.printJSON(doctorJSON{OK: !r.Failed(), Problems: nonNil(r.Problems), Warnings: nonNil(r.Warnings)}); err != nil {
+					return err
+				}
+				if r.Failed() {
+					return ErrFailed
+				}
+				return nil
+			}
+			if err := a.report(r, err); err != nil {
 				return err
 			}
-			a.printf("no problems found\n")
+			if a.human() {
+				a.printf("%s\n", a.style().ok.Render("✓ no problems found"))
+			} else {
+				a.printf("no problems found\n")
+			}
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&asJSON, "json", false, "print the findings as JSON; the exit status still reports problems")
 	cmd.Flags().BoolVar(&opts.Strict, "strict", false, "fail on local skills that aren't committed")
 	cmd.Flags().BoolVar(&opts.Offline, "offline", false, "skip network checks")
 	return cmd
@@ -690,6 +895,15 @@ func (a *app) cacheCmd() *cobra.Command {
 	return cmd
 }
 
+// working runs a report-returning operation behind a spinner.
+func (a *app) working(title string, fn func() (*project.Report, error)) (r *project.Report, err error) {
+	busyErr := a.busy(title, func() error { r, err = fn(); return nil })
+	if err == nil {
+		err = busyErr
+	}
+	return r, err
+}
+
 // summary cuts a description to max runes.
 func summary(desc string, max int) string {
 	if r := []rune(desc); len(r) > max {
@@ -706,6 +920,14 @@ func splitList(s string) []string {
 		}
 	}
 	return out
+}
+
+// nonNil makes an empty result print as [] rather than null in JSON.
+func nonNil[T any](s []T) []T {
+	if s == nil {
+		return []T{}
+	}
+	return s
 }
 
 func sortedKeys[V any](m map[string]V) []string {

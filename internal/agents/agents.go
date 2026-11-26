@@ -44,6 +44,27 @@ func HarnessIDs() []string {
 	return ids
 }
 
+// agentEnv lists variables that coding agents set in the shells they run
+// commands in. AI_AGENT and AGENT are the proposed vendor-neutral markers
+// (agentsmd/agents.md#136); the rest are vendor-specific.
+// shortcut: KIRO_SESSION_ID and VSCODE_AGENT_BASH_FIXUPS are observed in Kiro's agent shell, not documented; replace them once Kiro documents a marker.
+var agentEnv = []string{
+	"AI_AGENT", "AGENT", "CLAUDECODE", "CODEX_SANDBOX", "CURSOR_AGENT", "GEMINI_CLI",
+	"KIRO_SESSION_ID", "VSCODE_AGENT_BASH_FIXUPS",
+}
+
+// InAgentShell reports whether getenv shows that a coding agent, not a person,
+// runs this process. Agent shells often have a terminal attached, so a TTY
+// check alone would let prompts block them.
+func InAgentShell(getenv func(string) string) bool {
+	for _, k := range agentEnv {
+		if getenv(k) != "" {
+			return true
+		}
+	}
+	return false
+}
+
 func Lookup(id string) (Agent, bool) {
 	for _, a := range known {
 		if a.ID == id {

@@ -20,10 +20,11 @@ const (
 )
 
 type Change struct {
-	Registry string
-	Name     string
-	Kind     ChangeKind
-	From, To string
+	Registry string     `json:"registry"`
+	Name     string     `json:"name"`
+	Kind     ChangeKind `json:"kind"`
+	From     string     `json:"from,omitempty"`
+	To       string     `json:"to,omitempty"`
 }
 
 func (c Change) String() string {
@@ -46,7 +47,7 @@ type target struct {
 
 func (t target) appliesTo(reg string) bool { return t.registry == "" || t.registry == reg }
 
-func (t target) wholeRegistry() bool { return t.spec.Namespace == "" }
+func (t target) wholeRegistry() bool { return t.spec == naming.Spec{} }
 
 // parseTargets accepts "ns", "ns/skill", an installed name, "reg:ns..." and "reg:".
 func (p *Project) parseTargets(args []string) ([]target, error) {
@@ -122,7 +123,7 @@ func (o resolveOptions) skillBumped(reg string, skill naming.Spec) bool {
 func excludedSet(reg *manifest.Registry) map[string]bool {
 	out := map[string]bool{}
 	for _, raw := range reg.Exclude {
-		if spec, err := naming.ParseSpec(raw); err == nil && !spec.IsNamespace() {
+		if spec, err := entrySpec(reg, raw); err == nil && !spec.IsNamespace() {
 			out[spec.InstalledName()] = true
 		}
 	}
@@ -132,7 +133,7 @@ func excludedSet(reg *manifest.Registry) map[string]bool {
 func installSpecs(reg *manifest.Registry) []naming.Spec {
 	var out []naming.Spec
 	for _, raw := range reg.Install {
-		if spec, err := naming.ParseSpec(raw); err == nil {
+		if spec, err := entrySpec(reg, raw); err == nil {
 			out = append(out, spec)
 		}
 	}
@@ -143,6 +144,9 @@ func installSpecs(reg *manifest.Registry) []naming.Spec {
 // 1.0 record the V1Path, which is still where the locked commit keeps the
 // skill; the next update relocks them at the current path.
 func lockedSpec(name string, e manifest.LockEntry) (naming.Spec, bool) {
+	if spec, ok := naming.ParsePlainPath(e.Path); ok && spec.InstalledName() == name {
+		return spec, true
+	}
 	for _, v1 := range []bool{false, true} {
 		if spec, ok := naming.ParsePath(e.Path, v1); ok && spec.InstalledName() == name {
 			return spec, true
@@ -155,7 +159,14 @@ func lockedSpec(name string, e manifest.LockEntry) (naming.Spec, bool) {
 // a namespace in install, or a skill in a lock. regName limits the search to
 // one registry when it isn't empty.
 func (p *Project) installedSpec(regName, raw string) (naming.Spec, error) {
-	return pickSpec(raw, "that is installed", func(c naming.Spec) bool {
+	if plain, err := naming.ParsePlain(raw); err == nil {
+		for _, reg := range p.Manifest.Registries {
+			if reg.Flat() && (regName == "" || reg.Name == regName) && (hasSpec(reg, reg.Install, plain) || hasLock(reg, plain)) {
+				return plain, nil
+			}
+		}
+	}
+	spec, err := pickSpec(raw, "that is installed", func(c naming.Spec) bool {
 		for _, reg := range p.Manifest.Registries {
 			if regName != "" && reg.Name != regName {
 				continue
@@ -173,6 +184,19 @@ func (p *Project) installedSpec(regName, raw string) (naming.Spec, error) {
 		}
 		return false
 	})
+	if errors.Is(err, errNoMatch) {
+		err = fmt.Errorf("%w%s", err, didYouMean(raw, p.Installed()))
+	}
+	return spec, err
+}
+
+func hasLock(reg *manifest.Registry, spec naming.Spec) bool {
+	e, ok := reg.Lock[spec.InstalledName()]
+	if !ok {
+		return false
+	}
+	s, ok := lockedSpec(spec.InstalledName(), e)
+	return ok && s == spec
 }
 
 // sameName finds another skill in catalog with spec's installed name, such as
@@ -186,6 +210,8 @@ func sameName(catalog map[string][]string, spec naming.Spec) (naming.Spec, bool)
 	}
 	return naming.Spec{}, false
 }
+
+var errNoMatch = errors.New("matches no namespace or skill")
 
 // pickSpec returns the one reading of raw that exists. An argument with a
 // single reading is returned as is, so callers report a missing skill the
@@ -212,7 +238,7 @@ func pickSpec(raw, where string, exists func(naming.Spec) bool) (naming.Spec, er
 	}
 	switch len(found) {
 	case 0:
-		return naming.Spec{}, fmt.Errorf("%q matches no namespace or skill %s", raw, where)
+		return naming.Spec{}, fmt.Errorf("%q %w %s", raw, errNoMatch, where)
 	case 1:
 		return spec, nil
 	default:
@@ -331,7 +357,7 @@ func (p *Project) resolveRegistry(reg *manifest.Registry, opts resolveOptions) (
 	if err != nil {
 		return nil, err
 	}
-	catalog, err := m.Catalog(commit)
+	catalog, err := catalogAt(reg, m, commit)
 	if err != nil {
 		return nil, err
 	}
@@ -379,7 +405,7 @@ func (p *Project) resolveRegistry(reg *manifest.Registry, opts resolveOptions) (
 		if opts.entryBumped(reg.Name, spec) || len(covered) == 0 {
 			skills, ok := catalog[spec.Namespace]
 			if !ok {
-				return nil, fmt.Errorf("namespace %s doesn't exist at %s", spec.Namespace, registry.Short(commit))
+				return nil, fmt.Errorf("namespace %s doesn't exist at %s%s", spec.Namespace, registry.Short(commit), didYouMean(spec.Namespace, sortedKeys(catalog)))
 			}
 			for _, s := range skills {
 				skill := naming.Spec{Namespace: spec.Namespace, Skill: s}
@@ -479,4 +505,44 @@ func (p *Project) allExcluded() map[string]bool {
 		}
 	}
 	return out
+}
+
+// Installed lists what commands that act on installed skills accept: the
+// namespaces and skills in install, and each locked skill as ns/skill and by
+// its installed name.
+func (p *Project) Installed() []string {
+	seen := map[string]bool{}
+	for _, reg := range p.Manifest.Registries {
+		for _, s := range installSpecs(reg) {
+			seen[s.String()] = true
+		}
+		for name, e := range reg.Lock {
+			seen[name] = true
+			if s, ok := lockedSpec(name, e); ok {
+				seen[s.String()] = true
+			}
+		}
+	}
+	return sortedKeys(seen)
+}
+
+func (p *Project) notInstalled(raw string) error {
+	return fmt.Errorf("%s isn't installed%s", raw, didYouMean(raw, p.Installed()))
+}
+
+// didYouMean returns a "; did you mean x?" suffix when a candidate is close to s.
+func didYouMean(s string, candidates []string) string {
+	if c, ok := naming.Closest(s, candidates); ok {
+		return fmt.Sprintf("; did you mean %s?", c)
+	}
+	return ""
+}
+
+func sortedKeys[V any](m map[string]V) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }

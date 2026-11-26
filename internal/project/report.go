@@ -5,10 +5,10 @@ import "fmt"
 // Report collects the outcome of an operation. Problems make the command fail;
 // warnings are informational.
 type Report struct {
-	Actions  []string
-	Warnings []string
-	Problems []string
-	Hints    []string
+	Actions  []string `json:"actions"`
+	Warnings []string `json:"warnings"`
+	Problems []string `json:"problems"`
+	Hints    []string `json:"hints"`
 }
 
 func (r *Report) Hint(format string, args ...any) {

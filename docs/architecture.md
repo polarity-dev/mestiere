@@ -55,6 +55,19 @@ Everything else is reported and left alone: local edits, your own skills, and re
 | You copied a skill to make your own | The copy is never touched |
 | Offline, with a cached registry | `sync` installs from the cache |
 
+## Registry layouts
+
+A registry has one of two layouts, recorded per registry in `skills.yaml`:
+
+| Layout | Recognized by | Skills | Installed name |
+|---|---|---|---|
+| mestiere (default) | `registry.yaml` at the root | `skills/<ns>/<ns>-<skill>/` | `<ns>-<skill>` |
+| `skills` | no `registry.yaml`, at least one `skills/<name>/SKILL.md` | `skills/<name>/` | `<name>` |
+
+`registry add` detects the layout once and writes it; it isn't re-detected later. In code, a skill of the `skills` layout is a `naming.Spec` with an empty namespace, so resolving, locking, syncing and the history check share one path. A `skills` registry has no `_shared` folder, so links leaving a skill are rejected as they are anywhere else.
+
+Registries with the `skills` layout are often whole projects. Their mirror is a partial clone (`--filter=blob:none`) of the one branch or tag in `ref`: commits and trees come down at once, and git fetches file contents when a skill is read. The history check walks that ref only, which covers every version this project can have installed from it.
+
 ## Packages
 
 All code lives in `internal/`:

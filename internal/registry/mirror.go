@@ -116,8 +116,13 @@ func CacheSize() (int64, error) {
 
 // Mirror is a bare clone of a registry, shared by every project on the machine.
 type Mirror struct {
-	URL     string
-	Dir     string
+	URL string
+	Dir string
+	// Follow limits the mirror to one branch or tag ("" for the default
+	// branch) and leaves file contents on the server until they're read.
+	// Registries with the vercel/skills layout are often whole projects,
+	// such as vercel/next.js, too large to mirror in full.
+	Follow  *string
 	fetched bool
 	// history caches HistoricalTrees per skill; contents caches Materialize
 	// per (skill tree, shared tree) pair.
@@ -145,13 +150,20 @@ func (m *Mirror) Fetch() error {
 	if m.fetched {
 		return nil
 	}
-	if !m.Exists() {
+	switch {
+	case !m.Exists():
 		if err := m.clone(); err != nil {
 			return err
 		}
-	} else if _, err := gitx.Run(m.Dir, "fetch", "--quiet", "--prune", "--force", "origin",
-		"+refs/heads/*:refs/heads/*", "+refs/tags/*:refs/tags/*"); err != nil {
-		return err
+	case m.Follow != nil:
+		if err := m.fetchFollowed(); err != nil {
+			return err
+		}
+	default:
+		if _, err := gitx.Run(m.Dir, "fetch", "--quiet", "--prune", "--force", "origin",
+			"+refs/heads/*:refs/heads/*", "+refs/tags/*:refs/tags/*"); err != nil {
+			return err
+		}
 	}
 	m.fetched = true
 	m.history = nil
@@ -167,10 +179,46 @@ func (m *Mirror) clone() error {
 		return err
 	}
 	defer os.RemoveAll(staged)
-	if _, err := gitx.Run(filepath.Dir(m.Dir), "clone", "--bare", "--quiet", m.URL, staged); err != nil {
+	args := []string{"clone", "--bare", "--quiet"}
+	if m.Follow != nil {
+		args = append(args, "--filter=blob:none", "--single-branch")
+		if *m.Follow != "" {
+			args = append(args, "--branch", *m.Follow)
+		}
+	}
+	if _, err := gitx.Run(filepath.Dir(m.Dir), append(args, m.URL, staged)...); err != nil {
 		return err
 	}
 	return os.Rename(staged, m.Dir)
+}
+
+// Partial reports whether the mirror leaves file contents on the server.
+func (m *Mirror) Partial() bool {
+	out, _ := gitx.Run(m.Dir, "config", "--get", "remote.origin.promisor")
+	return out == "true"
+}
+
+// fetchFollowed updates the one branch or tag a followed mirror tracks.
+func (m *Mirror) fetchFollowed() error {
+	ref := *m.Follow
+	if ref == "" {
+		head, err := gitx.Run(m.Dir, "symbolic-ref", "HEAD")
+		if err != nil {
+			return err
+		}
+		ref = strings.TrimPrefix(head, "refs/heads/")
+	}
+	fetch := func(spec string) error {
+		_, err := gitx.Run(m.Dir, "fetch", "--quiet", "--force", "--filter=blob:none", "origin", spec)
+		return err
+	}
+	if err := fetch("+refs/heads/" + ref + ":refs/heads/" + ref); err == nil {
+		return nil
+	}
+	if err := fetch("+refs/tags/" + ref + ":refs/tags/" + ref); err != nil {
+		return fmt.Errorf("fetch %s from %s: %w", ref, m.URL, err)
+	}
+	return nil
 }
 
 // Resolve turns a branch, tag or commit into a commit ID. An empty ref means
@@ -220,6 +268,35 @@ func (m *Mirror) Catalog(commit string) (map[string][]string, error) {
 		sort.Strings(catalog[ns])
 	}
 	return catalog, nil
+}
+
+// PlainCatalog lists the skills of a registry with the vercel/skills layout at
+// commit: every skills/<skill> directory with a SKILL.md. They are returned
+// under the empty namespace, the namespace of plain skills. Only trees are
+// read, so a followed mirror downloads no file contents.
+func (m *Mirror) PlainCatalog(commit string) (map[string][]string, error) {
+	out, err := gitx.RunInput(m.Dir, nil, "ls-tree", "-r", "-z", "--name-only", commit, "--", "skills/")
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	for _, p := range strings.Split(string(out), "\x00") {
+		if path.Base(p) != "SKILL.md" {
+			continue
+		}
+		if spec, ok := naming.ParsePlainPath(path.Dir(p)); ok {
+			names = append(names, spec.Skill)
+		}
+	}
+	sort.Strings(names)
+	return map[string][]string{"": names}, nil
+}
+
+// HasRegistryFile reports whether commit has a registry.yaml at the root,
+// which tells a mestiere registry from one with the vercel/skills layout.
+func (m *Mirror) HasRegistryFile(commit string) (bool, error) {
+	out, err := gitx.Run(m.Dir, "ls-tree", "--name-only", commit, "--", "registry.yaml")
+	return out == "registry.yaml", err
 }
 
 // TreeAt returns the tree ID of path at commit.

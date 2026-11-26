@@ -16,20 +16,30 @@ import (
 	"github.com/polarity-dev/mestiere/internal/naming"
 )
 
-func indexSpec(list []string, spec naming.Spec) int {
+// entrySpec parses an install or exclude entry of reg.
+func entrySpec(reg *manifest.Registry, raw string) (naming.Spec, error) {
+	if reg.Flat() {
+		return naming.ParsePlain(raw)
+	}
+	return naming.ParseSpec(raw)
+}
+
+func indexSpec(reg *manifest.Registry, list []string, spec naming.Spec) int {
 	for i, raw := range list {
-		if s, err := naming.ParseSpec(raw); err == nil && s == spec {
+		if s, err := entrySpec(reg, raw); err == nil && s == spec {
 			return i
 		}
 	}
 	return -1
 }
 
-func hasSpec(list []string, spec naming.Spec) bool { return indexSpec(list, spec) >= 0 }
+func hasSpec(reg *manifest.Registry, list []string, spec naming.Spec) bool {
+	return indexSpec(reg, list, spec) >= 0
+}
 
-func withoutSpec(list []string, drop func(naming.Spec) bool) []string {
+func withoutSpec(reg *manifest.Registry, list []string, drop func(naming.Spec) bool) []string {
 	return without(list, func(raw string) bool {
-		s, err := naming.ParseSpec(raw)
+		s, err := entrySpec(reg, raw)
 		return err == nil && drop(s)
 	})
 }
@@ -45,6 +55,9 @@ func (p *Project) Add(registryName string, args []string, force bool) (*Report, 
 	if err != nil {
 		return nil, err
 	}
+	if reg.Flat() {
+		return p.addPlain(reg, args, force)
+	}
 	r := &Report{}
 	var reincluded []target
 	var catalog map[string][]string
@@ -56,16 +69,29 @@ func (p *Project) Add(registryName string, args []string, force bool) (*Report, 
 		_, hasNS := catalog[c.Namespace]
 		return hasNS && (c.IsNamespace() || contains(catalog[c.Namespace], c.Skill))
 	}
+	suggest := func(raw string) string {
+		var names []string
+		for ns, skills := range catalog {
+			names = append(names, ns)
+			for _, s := range skills {
+				names = append(names, ns+"/"+s, ns+"-"+s)
+			}
+		}
+		return didYouMean(raw, names)
+	}
 	for _, a := range args {
 		spec, err := pickSpec(a, "in registry "+reg.Name, offered)
 		if catalogErr != nil {
 			return nil, catalogErr
 		}
+		if errors.Is(err, errNoMatch) {
+			return nil, fmt.Errorf("%w%s", err, suggest(a))
+		}
 		if err != nil {
 			return nil, err
 		}
 		if !spec.IsNamespace() {
-			spec, err = offeredSkill(spec, reg.Name, offered)
+			spec, err = offeredSkill(spec, reg.Name, offered, suggest)
 			if catalogErr != nil {
 				return nil, catalogErr
 			}
@@ -76,11 +102,11 @@ func (p *Project) Add(registryName string, args []string, force bool) (*Report, 
 		}
 		nsSpec := naming.Spec{Namespace: spec.Namespace}
 		if spec.IsNamespace() {
-			if hasSpec(reg.Install, spec) {
+			if hasSpec(reg, reg.Install, spec) {
 				r.Warn("%s is already installed", spec)
 				continue
 			}
-			reg.Install = withoutSpec(reg.Install, spec.Covers)
+			reg.Install = withoutSpec(reg, reg.Install, spec.Covers)
 			reg.Install = append(reg.Install, spec.String())
 			// Resolve counts a namespace with locked skills as done, so the
 			// skills not locked yet are targeted; locked ones keep their pin.
@@ -98,10 +124,10 @@ func (p *Project) Add(registryName string, args []string, force bool) (*Report, 
 			}
 			continue
 		}
-		wasExcluded := hasSpec(reg.Exclude, spec)
-		reg.Exclude = withoutSpec(reg.Exclude, func(s naming.Spec) bool { return s == spec })
+		wasExcluded := hasSpec(reg, reg.Exclude, spec)
+		reg.Exclude = withoutSpec(reg, reg.Exclude, func(s naming.Spec) bool { return s == spec })
 		switch {
-		case hasSpec(reg.Install, spec), hasSpec(reg.Install, nsSpec):
+		case hasSpec(reg, reg.Install, spec), hasSpec(reg, reg.Install, nsSpec):
 			if wasExcluded {
 				reincluded = append(reincluded, target{registry: reg.Name, spec: spec, raw: a})
 			} else {
@@ -111,6 +137,36 @@ func (p *Project) Add(registryName string, args []string, force bool) (*Report, 
 			reg.Install = append(reg.Install, spec.String())
 		}
 	}
+	return p.install(r, reincluded, force)
+}
+
+// addPlain requests skills from a registry with the vercel/skills layout,
+// which has no namespaces: each argument is a skill name.
+func (p *Project) addPlain(reg *manifest.Registry, args []string, force bool) (*Report, error) {
+	catalog, err := p.Catalog(reg.Name)
+	if err != nil {
+		return nil, err
+	}
+	r := &Report{}
+	for _, a := range args {
+		spec, err := naming.ParsePlain(a)
+		if err != nil {
+			return nil, fmt.Errorf("%w; registry %s has the %s layout, so name a skill without a namespace", err, reg.Name, manifest.LayoutSkills)
+		}
+		if !contains(catalog[""], spec.Skill) {
+			return nil, fmt.Errorf("registry %s has no skill %s%s", reg.Name, spec, didYouMean(spec.Skill, catalog[""]))
+		}
+		if hasSpec(reg, reg.Install, spec) {
+			r.Warn("%s is already installed", spec)
+			continue
+		}
+		reg.Install = append(reg.Install, spec.String())
+	}
+	return p.install(r, nil, force)
+}
+
+// install locks what install requests, plus the reincluded targets, then syncs.
+func (p *Project) install(r *Report, reincluded []target, force bool) (*Report, error) {
 	changes, err := p.resolve(resolveOptions{targets: reincluded})
 	if err != nil {
 		return nil, err
@@ -132,7 +188,7 @@ func (p *Project) Add(registryName string, args []string, force bool) (*Report, 
 // offeredSkill checks that the registry offers spec. It also accepts
 // ns/ns-skill, the skill's folder name, and suggests the spec with the same
 // installed name when one exists. On error it returns spec unchanged.
-func offeredSkill(spec naming.Spec, registry string, offered func(naming.Spec) bool) (naming.Spec, error) {
+func offeredSkill(spec naming.Spec, registry string, offered func(naming.Spec) bool, suggest func(string) string) (naming.Spec, error) {
 	if offered(spec) {
 		return spec, nil
 	}
@@ -147,7 +203,7 @@ func offeredSkill(spec naming.Spec, registry string, offered func(naming.Spec) b
 			return spec, fmt.Errorf("registry %s has no skill %s; did you mean %s?", registry, spec, c)
 		}
 	}
-	return spec, fmt.Errorf("registry %s has no skill %s", registry, spec)
+	return spec, fmt.Errorf("registry %s has no skill %s%s", registry, spec, suggest(spec.String()))
 }
 
 // checkAddConflicts refuses to install over a directory that isn't a published
@@ -202,19 +258,19 @@ func (p *Project) Remove(args []string, force bool) (*Report, error) {
 				continue
 			}
 			n := len(reg.Install)
-			reg.Install = withoutSpec(reg.Install, t.spec.Covers)
+			reg.Install = withoutSpec(reg, reg.Install, t.spec.Covers)
 			if len(reg.Install) < n {
 				matched = true
 			}
-			if !t.spec.IsNamespace() && hasSpec(reg.Install, naming.Spec{Namespace: t.spec.Namespace}) {
-				if !hasSpec(reg.Exclude, t.spec) {
+			if !t.spec.IsNamespace() && hasSpec(reg, reg.Install, naming.Spec{Namespace: t.spec.Namespace}) {
+				if !hasSpec(reg, reg.Exclude, t.spec) {
 					reg.Exclude = append(reg.Exclude, t.spec.String())
 				}
 				matched = true
 			}
 		}
 		if !matched {
-			return nil, fmt.Errorf("%s isn't installed", t.raw)
+			return nil, p.notInstalled(t.raw)
 		}
 	}
 	for _, reg := range p.Manifest.Registries {
@@ -287,7 +343,7 @@ func (p *Project) Update(args []string, force bool) ([]Change, *Report, error) {
 	}
 	for _, t := range targets {
 		if !p.targetInstalled(t) {
-			return nil, nil, fmt.Errorf("%s isn't installed", t.raw)
+			return nil, nil, p.notInstalled(t.raw)
 		}
 	}
 	changes, err := p.resolve(resolveOptions{all: len(targets) == 0, targets: targets})
@@ -356,8 +412,8 @@ func (p *Project) Eject(args []string, track bool) (*Report, error) {
 			return nil, fmt.Errorf("%s isn't installed from a registry", name)
 		}
 		delete(owner.Lock, name)
-		owner.Install = withoutSpec(owner.Install, func(s naming.Spec) bool { return s == spec })
-		if !hasSpec(owner.Exclude, spec) {
+		owner.Install = withoutSpec(owner, owner.Install, func(s naming.Spec) bool { return s == spec })
+		if !hasSpec(owner, owner.Exclude, spec) {
 			owner.Exclude = append(owner.Exclude, spec.String())
 		}
 		r.Action("eject %s; it's now a local skill", name)

@@ -1033,3 +1033,95 @@ func TestInitValidation(t *testing.T) {
 		t.Fatalf("re-init changed agents: %v, %v", p.Manifest.Agents, err)
 	}
 }
+
+// TestSkillsLayoutRegistry covers a registry laid out for vercel/skills, such
+// as vercel/next.js: skills/<name>/SKILL.md, no registry.yaml, no namespaces.
+func TestSkillsLayoutRegistry(t *testing.T) {
+	testutil.Isolate(t)
+	reg := testutil.NewRegistry(t)
+	reg.Remove("registry.yaml")
+	reg.Write("package.json", "{}")
+	reg.Write("skills/.claude-plugin/plugin.json", "{}")
+	reg.Write("skills/next-dev-loop/SKILL.md", "---\nname: next-dev-loop\ndescription: Run the dev loop.\n---\nv1\n")
+	reg.Write("skills/next-dev-loop/references/notes.md", "notes")
+	reg.Write("skills/next-bundle-optimizer/SKILL.md", "---\nname: next-bundle-optimizer\ndescription: Shrink bundles.\n---\n")
+	reg.Commit("skills")
+
+	dir := filepath.Join(t.TempDir(), "project")
+	testutil.InitRepo(t, dir)
+	p, _, err := Init(dir, []string{"claude"}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := p.AddRegistry("next", reg.Dir, ""); err != nil {
+		t.Fatal(err)
+	}
+	f := &fixture{t: t, reg: reg, dir: dir, p: p}
+	if got := f.reopen().Manifest.Registry("next").Layout; got != manifest.LayoutSkills {
+		t.Fatalf("layout = %q", got)
+	}
+
+	l, err := f.reopen().Browse("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(l.Namespaces) != 1 || len(l.Namespaces[0].Skills) != 2 || l.Namespaces[0].Skills[0].Description != "Shrink bundles." {
+		t.Fatalf("listing = %+v", l.Namespaces)
+	}
+
+	if _, err := f.reopen().Add("", []string{"next-dev-lop"}, false); err == nil || !strings.Contains(err.Error(), "did you mean next-dev-loop?") {
+		t.Fatalf("typo err = %v", err)
+	}
+	if _, err := f.reopen().Add("", []string{"next/dev-loop"}, false); err == nil {
+		t.Fatal("a namespaced name was accepted for a skills-layout registry")
+	}
+	requireClean(t, mustReport(t)(f.reopen().Add("", []string{"next-dev-loop"}, false)))
+	if f.read(".agents/skills/next-dev-loop/references/notes.md") != "notes" || !f.exists(".claude/skills/next-dev-loop") {
+		t.Fatal("next-dev-loop isn't installed and linked")
+	}
+	if m := f.read("skills.yaml"); !strings.Contains(m, "layout: skills") || !strings.Contains(m, "path: skills/next-dev-loop") {
+		t.Fatalf("skills.yaml:\n%s", m)
+	}
+
+	reg.Write("skills/next-dev-loop/SKILL.md", "---\nname: next-dev-loop\ndescription: Run the dev loop.\n---\nv2\n")
+	reg.Commit("v2")
+	if changes, err := f.reopen().Outdated(); err != nil || len(changes) != 1 || changes[0].Name != "next-dev-loop" {
+		t.Fatalf("outdated = %v, %v", changes, err)
+	}
+	before := f.read("skills.yaml")
+	_, r, err := f.reopen().Update([]string{"next-dev-loop"}, false)
+	requireClean(t, mustReport(t)(r, err))
+	if !strings.Contains(f.read(".agents/skills/next-dev-loop/SKILL.md"), "v2") {
+		t.Fatal("update didn't install v2")
+	}
+
+	// A teammate still on the old lock: their v1 folder is a published version, so sync replaces it.
+	after := f.read("skills.yaml")
+	testutil.WriteFile(t, f.path("skills.yaml"), before, 0o644)
+	requireClean(t, f.sync(SyncOptions{}))
+	if !strings.Contains(f.read(".agents/skills/next-dev-loop/SKILL.md"), "v1") {
+		t.Fatal("sync didn't go back to the locked v1")
+	}
+	testutil.WriteFile(t, f.path("skills.yaml"), after, 0o644)
+	requireClean(t, f.sync(SyncOptions{}))
+
+	testutil.WriteFile(t, f.path(".agents/skills/next-dev-loop/SKILL.md"), "edited", 0o644)
+	if r, _ := f.reopen().Sync(SyncOptions{}); !r.Failed() {
+		t.Fatal("sync overwrote a local edit")
+	}
+	requireClean(t, f.sync(SyncOptions{Force: true}))
+	requireClean(t, mustReport(t)(f.reopen().Remove([]string{"next-dev-loop"}, false)))
+	if f.exists(".agents/skills/next-dev-loop") || f.exists(".claude/skills/next-dev-loop") {
+		t.Fatal("remove left files behind")
+	}
+}
+
+func mustReport(t *testing.T) func(*Report, error) *Report {
+	return func(r *Report, err error) *Report {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+}

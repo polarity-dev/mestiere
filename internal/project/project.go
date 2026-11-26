@@ -2,6 +2,7 @@
 package project
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -194,8 +195,16 @@ func (p *Project) validate() error {
 		if reg.URL == "" {
 			return fmt.Errorf("registry %s: url is required", reg.Name)
 		}
+		if reg.Flat() && len(reg.Exclude) > 0 {
+			return fmt.Errorf("registry %s: exclude doesn't apply to the %s layout; list only the skills you want in install", reg.Name, manifest.LayoutSkills)
+		}
+		switch reg.Layout {
+		case "", manifest.LayoutSkills:
+		default:
+			return fmt.Errorf("registry %s: layout must be %q or unset, got %q", reg.Name, manifest.LayoutSkills, reg.Layout)
+		}
 		for _, raw := range reg.Install {
-			if _, err := naming.ParseSpec(raw); err != nil {
+			if _, err := entrySpec(reg, raw); err != nil {
 				return fmt.Errorf("registry %s: install %q: %w", reg.Name, raw, err)
 			}
 		}
@@ -255,6 +264,10 @@ func (p *Project) mirror(reg *manifest.Registry) (*registry.Mirror, error) {
 	m, err := registry.Open(url)
 	if err != nil {
 		return nil, err
+	}
+	if reg.Flat() {
+		ref := reg.Ref
+		m.Follow = &ref
 	}
 	p.mirrors[url] = m
 	return m, nil
@@ -323,6 +336,14 @@ func (p *Project) Catalog(name string) (map[string][]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	return catalogAt(reg, m, commit)
+}
+
+// catalogAt lists reg's skills at commit by namespace; plain skills are under "".
+func catalogAt(reg *manifest.Registry, m *registry.Mirror, commit string) (map[string][]string, error) {
+	if reg.Flat() {
+		return m.PlainCatalog(commit)
+	}
 	return m.Catalog(commit)
 }
 
@@ -332,18 +353,27 @@ type Offered struct {
 	Installed   bool
 }
 
+func (o Offered) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Name          string `json:"name"`
+		InstalledName string `json:"installed_name"`
+		Description   string `json:"description"`
+		Installed     bool   `json:"installed"`
+	}{o.Spec.String(), o.Spec.InstalledName(), o.Description, o.Installed})
+}
+
 type OfferedNamespace struct {
-	Name        string
-	Description string
+	Name        string `json:"name"`
+	Description string `json:"description"`
 	// Installed reports whether install lists the whole namespace.
-	Installed bool
-	Skills    []Offered
+	Installed bool      `json:"installed"`
+	Skills    []Offered `json:"skills"`
 }
 
 type Listing struct {
-	Registry   string
-	Commit     string
-	Namespaces []OfferedNamespace
+	Registry   string             `json:"registry"`
+	Commit     string             `json:"commit"`
+	Namespaces []OfferedNamespace `json:"namespaces"`
 }
 
 // Browse lists every namespace and skill a registry offers at its configured
@@ -357,7 +387,7 @@ func (p *Project) Browse(name string) (*Listing, error) {
 	if err != nil {
 		return nil, err
 	}
-	catalog, err := m.Catalog(commit)
+	catalog, err := catalogAt(reg, m, commit)
 	if err != nil {
 		return nil, err
 	}
@@ -385,7 +415,7 @@ func (p *Project) Browse(name string) (*Listing, error) {
 		index[ns] = i
 		l.Namespaces = append(l.Namespaces, OfferedNamespace{
 			Name: ns, Description: nsDescriptions[ns],
-			Installed: hasSpec(reg.Install, naming.Spec{Namespace: ns}),
+			Installed: hasSpec(reg, reg.Install, naming.Spec{Namespace: ns}),
 		})
 	}
 	for _, s := range specs {
@@ -407,7 +437,48 @@ func (p *Project) AddRegistry(name, url, ref string) error {
 		p.Manifest.RemoveRegistry(name)
 		return err
 	}
+	if err := p.detectLayout(p.Manifest.Registry(name)); err != nil {
+		p.Manifest.RemoveRegistry(name)
+		return err
+	}
 	return p.Save()
+}
+
+// detectLayout fetches a new registry and records whether it has the
+// vercel/skills layout: no registry.yaml, and skills at skills/<name>/SKILL.md.
+// It looks through a followed mirror first, so a large project such as
+// vercel/next.js is never mirrored in full.
+func (p *Project) detectLayout(reg *manifest.Registry) error {
+	if p.Offline {
+		return nil
+	}
+	reg.Layout = manifest.LayoutSkills
+	delete(p.mirrors, p.resolveURL(reg.URL))
+	m, commit, err := p.fetchRef(reg)
+	if err != nil {
+		reg.Layout = ""
+		return fmt.Errorf("registry %s: %w", reg.Name, err)
+	}
+	isMestiere, err := m.HasRegistryFile(commit)
+	if err != nil {
+		return err
+	}
+	if !isMestiere {
+		catalog, err := m.PlainCatalog(commit)
+		if err != nil {
+			return err
+		}
+		if len(catalog[""]) > 0 {
+			return nil
+		}
+	}
+	reg.Layout = ""
+	delete(p.mirrors, p.resolveURL(reg.URL))
+	if m.Follow != nil && m.Partial() {
+		// A mestiere registry is mirrored in full; the next fetch clones it again.
+		return os.RemoveAll(m.Dir)
+	}
+	return nil
 }
 
 func contains(list []string, s string) bool {
