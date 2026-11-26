@@ -26,22 +26,36 @@ func TestBundledRegistryLints(t *testing.T) {
 }
 
 var (
-	invocationRe = regexp.MustCompile("mestiere((?: [a-z][a-z-]*)+)")
+	// Only where a command starts, so prose such as "set up mestiere for this repo" in a prompt is skipped.
+	invocationRe = regexp.MustCompile(`(?:^|[;&|($]\s*)mestiere((?: [a-z][a-z-]*)+)`)
 	flagRe       = regexp.MustCompile(`(?:^|\s)--([a-z][a-z-]*)`)
 	inlineRe     = regexp.MustCompile("`([^`\n]+)`")
 	codeBlockRe  = regexp.MustCompile("(?s)```[a-z]*\n(.*?)```")
 )
 
-// TestBundledSkillsUseRealCommands keeps the bundled skills in step with the
-// CLI: every `mestiere ...` command and flag written in their code must exist.
-func TestBundledSkillsUseRealCommands(t *testing.T) {
+// TestDocsUseRealCommands keeps the bundled skills, the README and the website
+// in step with the CLI: every `mestiere ...` command and flag written in their
+// code must exist.
+func TestDocsUseRealCommands(t *testing.T) {
 	root := NewRootCmd(os.Stdout, os.Stderr, false)
+	root.InitDefaultCompletionCmd()
 	files, _ := filepath.Glob(filepath.Join(repoRoot, "skills", "*", "*", "SKILL.md"))
 	shared, _ := filepath.Glob(filepath.Join(repoRoot, "skills", "*", "_shared", "references", "*.md"))
 	if len(files) == 0 {
 		t.Fatal("no bundled skills found")
 	}
-	for _, file := range append(files, shared...) {
+	files = append(files, shared...)
+	files = append(files, filepath.Join(repoRoot, "README.md"))
+	err := filepath.WalkDir(filepath.Join(repoRoot, "website", "src", "content"), func(path string, d os.DirEntry, err error) error {
+		if err == nil && strings.HasSuffix(path, ".md") {
+			files = append(files, path)
+		}
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range files {
 		data, err := os.ReadFile(file)
 		if err != nil {
 			t.Fatal(err)
@@ -54,6 +68,7 @@ func TestBundledSkillsUseRealCommands(t *testing.T) {
 						t.Errorf("%s: unknown command %q", file, m[0])
 						continue
 					}
+					cmd.InitDefaultHelpFlag()
 					for _, flag := range flagRe.FindAllStringSubmatch(line[strings.Index(line, m[0]):], -1) {
 						if cmd.Flags().Lookup(flag[1]) == nil && cmd.InheritedFlags().Lookup(flag[1]) == nil {
 							t.Errorf("%s: %q has no flag --%s", file, cmd.CommandPath(), flag[1])
