@@ -1,0 +1,124 @@
+---
+import { HOME, HOME_CODE } from "../i18n/home.ts"
+import { UI } from "../i18n/ui.ts"
+import { heroGraphic } from "../lib/graphics.ts"
+import { liveVersion } from "../lib/live-version.ts"
+import type { Faq } from "../lib/markdown.ts"
+import { localizeHref, localizeLinks, SITE, type Lang } from "../lib/site.ts"
+import GithubIcon from "../assets/icons/github-mark.svg"
+
+interface Props {
+  lang: Lang
+  faq: (Faq & { html: string })[]
+}
+
+const { lang, faq } = Astro.props
+const t = HOME[lang]
+const href = (path: string) => localizeHref(path, lang)
+const html = (markup: string) => localizeLinks(markup, lang);
+---
+<section class="hero" id="main" aria-labelledby="hero-title">
+  <div class="container hero-grid">
+    <div class="hero-text">
+      <p class="eyebrow">{t.hero.eyebrow}</p>
+      <h1 id="hero-title">{t.hero.title}</h1>
+      <p class="lead">{t.hero.lead}</p>
+    </div>
+    <div class="hero-graphic" set:html={heroGraphic(UI[lang].loomTitle)} />
+    <div class="hero-install desktop-only">
+      <pre class="terminal"><code>{HOME_CODE.brew}</code></pre>
+      <p class="actions">
+        <a class="button" href={href("/docs/")}>{t.hero.start}</a>
+        <a class="button button-primary" href={href("/install/")}>{t.hero.install}</a>
+      </p>
+    </div>
+    <div class="hero-install mobile-only">
+      <p class="actions">
+        <a class="button button-primary" href="#how-title">{t.hero.how}</a>
+      </p>
+    </div>
+    <p class="hero-meta" set:html={`${liveVersion("v")} · ${html(t.hero.metaHtml)}`} />
+  </div>
+</section>
+
+<section class="section section-alt" aria-labelledby="how-title">
+  <div class="container">
+    <h2 id="how-title">{t.how.title}</h2>
+    <ol class="steps">
+      {t.how.steps.map(step => (
+        <li>
+          <h3>{step.title}</h3>
+          <p set:html={html(step.html)} />
+        </li>
+      ))}
+    </ol>
+  </div>
+</section>
+
+<section class="section desktop-only" aria-labelledby="quick-start-title">
+  <div class="container">
+    <h2 id="quick-start-title">{t.quickStart.title}</h2>
+    <div class="columns">
+      <div>
+        <h3>{t.quickStart.install.title}</h3>
+        <pre class="terminal"><code>{HOME_CODE.install}</code></pre>
+        <p set:html={html(t.quickStart.install.html)} />
+        <p class="more"><a href={href("/docs/")}>{t.quickStart.install.more}</a></p>
+      </div>
+      <div>
+        <h3>{t.quickStart.publish.title}</h3>
+        <pre class="terminal"><code>{HOME_CODE.publish}</code></pre>
+        <p set:html={html(t.quickStart.publish.html)} />
+        <p class="more"><a href={href("/docs/registries/")}>{t.quickStart.publish.more}</a></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section section-alt mobile-plain" aria-labelledby="why-title">
+  <div class="container">
+    <h2 id="why-title">{t.why.title}</h2>
+    <p class="section-lead" set:html={t.why.leadHtml} />
+    <ul class="features">
+      {t.why.features.map(feature => <li><h3>{feature.title}</h3><p set:html={html(feature.html)} /></li>)}
+    </ul>
+  </div>
+</section>
+
+<section class="section desktop-only" aria-labelledby="agents-title">
+  <div class="container narrow">
+    <h2 id="agents-title">{t.agents.title}</h2>
+    <p set:html={t.agents.introHtml} />
+    <pre class="terminal prompt"><code>{t.agents.prompt}</code></pre>
+    {t.agents.html.map(paragraph => <p set:html={html(paragraph)} />)}
+    <p class="more"><a href={href("/docs/agents/")}>{t.agents.more}</a></p>
+  </div>
+</section>
+
+<section class="section section-alt" aria-labelledby="faq-title">
+  <div class="container narrow">
+    <h2 id="faq-title">{t.faq.title}</h2>
+    <div class="faq">
+      {faq.map(item => (
+        <details class="faq-item">
+          <summary><h3>{item.question}</h3></summary>
+          <div class="faq-answer" set:html={item.html} />
+        </details>
+      ))}
+    </div>
+  </div>
+</section>
+
+<section class="section cta" aria-labelledby="cta-title">
+  <div class="container narrow">
+    <h2 id="cta-title">{t.cta.title}</h2>
+    <p class="actions desktop-only">
+      <a class="button" href={href("/docs/commands/")}>{t.cta.commands}</a>
+      <a class="button button-primary" href={href("/install/")}>{t.cta.install}</a>
+    </p>
+    <p class="cta-note mobile-only">{t.cta.note}</p>
+    <p class="actions mobile-only">
+      <a class="button button-github" href={SITE.repo}><GithubIcon class="icon-github" aria-hidden="true" focusable="false" /><span>{t.cta.star}</span></a>
+    </p>
+  </div>
+</section>

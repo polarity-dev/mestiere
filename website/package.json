@@ -1,0 +1,42 @@
+{
+  "name": "mestiere-website",
+  "private": true,
+  "type": "module",
+  "description": "Website of mestiere (mestiere.io)",
+  "packageManager": "pnpm@12.15.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "check": "astro check",
+    "lint": "eslint --flag unstable_native_nodejs_ts_config .",
+    "lavagna": "node lavagna/build.ts",
+    "lavagna:layout": "node lavagna/layout.ts"
+  },
+  "dependencies": {
+    "@astrojs/markdown-satteri": "0.4.6",
+    "@astrojs/sitemap": "3.7.4",
+    "@resvg/resvg-js": "2.6.2",
+    "astro": "7.4.5",
+    "opentype.js": "1.3.4",
+    "satteri": "0.10.5",
+    "wawoff2": "2.0.1"
+  },
+  "devDependencies": {
+    "@astrojs/check": "0.9.12",
+    "@eslint/js": "10.0.1",
+    "@stylistic/eslint-plugin": "6.0.1",
+    "@types/node": "24.19.2",
+    "@types/opentype.js": "1.3.10",
+    "astro-eslint-parser": "3.2.0",
+    "eslint": "10.15.0",
+    "eslint-plugin-astro": "3.2.1",
+    "globals": "17.14.0",
+    "playwright": "1.65.1",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.74.0"
+  }
+}

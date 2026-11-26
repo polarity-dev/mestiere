@@ -1,0 +1,17 @@
+---
+import type { Page } from "../lib/pages.ts"
+
+interface Props {
+  pages: Page[]
+  current: Page
+}
+
+const { pages, current } = Astro.props
+---
+<ul>
+  {pages.map(p => (
+    <li>
+      <a href={p.path} aria-current={p.key === current.key ? "page" : undefined}>{p.navTitle}</a>
+    </li>
+  ))}
+</ul>

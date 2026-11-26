@@ -1,0 +1,82 @@
+name: website
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - website/**
+      - docs/assets/**
+      - .github/workflows/website.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: website
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: website-deploy
+      cancel-in-progress: false
+    env:
+      STACK_NAME: mestiere-website
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: website/package.json
+          cache: true
+          cache_dependency_path: website/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.WEBSITE_DEPLOY_ROLE_ARN }}
+          aws-region: eu-west-1
+      - name: Upload to S3
+        run: |
+          output() {
+            aws cloudformation describe-stacks --stack-name "$STACK_NAME" \
+              --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text
+          }
+
+          bucket="s3://$(output SiteBucketName)"
+          page='public, max-age=0, s-maxage=31536000, must-revalidate'
+          static='public, max-age=3600, s-maxage=31536000'
+
+          upload() {
+            local cache="$1" type="$2"
+            shift 2
+            local args=(--exclude '*' --cache-control "$cache" --only-show-errors)
+            if [[ "$type" != "-" ]]; then
+              args+=(--content-type "$type")
+            fi
+            for pattern in "$@"; do
+              args+=(--include "$pattern")
+            done
+            aws s3 sync dist "$bucket" "${args[@]}"
+          }
+
+          upload 'public, max-age=31536000, immutable' - '_astro/*'
+          upload "$static" - 'assets/*' 'scripts/*' '*.png' '*.svg'
+          upload "$page" 'text/markdown; charset=utf-8' '*.md'
+          upload "$page" 'text/plain; charset=utf-8' '*.txt'
+          upload "$page" 'application/manifest+json' '*.webmanifest'
+          upload "$page" 'application/xml; charset=utf-8' '*.xml'
+          upload "$page" 'text/html; charset=utf-8' '*.html'
+          aws s3 sync dist "$bucket" --delete --only-show-errors
+
+          aws cloudfront create-invalidation --distribution-id "$(output DistributionId)" \
+            --paths '/*' --query Invalidation.Id --output text

@@ -1,0 +1,102 @@
+---
+import { Font } from "astro:assets"
+import { ClientRouter } from "astro:transitions"
+import { OG_HEIGHT, OG_WIDTH } from "../lib/images.ts"
+import { LANGS, LOCALES, otherLang, pagePath, SITE, type Lang } from "../lib/site.ts"
+import { jsonLd } from "../lib/structured-data.ts"
+import "../styles/site.css"
+
+interface Props {
+  lang: Lang
+  pageKey: string | null
+  title: string
+  ogTitle: string
+  description: string
+  canonical: string
+  robots?: string
+  ogType: "website" | "article"
+  ogImage: string
+  ogImageAlt: string
+  modified?: string | undefined
+  markdownPath?: string | undefined
+  markdownLabel?: string | undefined
+  graph?: Record<string, unknown>[] | undefined
+  bodyClass: string
+}
+
+const {
+  lang,
+  pageKey,
+  title,
+  ogTitle,
+  description,
+  canonical,
+  ogType,
+  ogImage,
+  ogImageAlt,
+  modified,
+  markdownPath,
+  markdownLabel,
+  graph,
+  bodyClass,
+  robots = "index, follow, max-snippet:-1, max-image-preview:large",
+} = Astro.props
+const ogImageUrl = SITE.url + ogImage;
+---
+<!doctype html>
+<html lang={lang}>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{title}</title>
+    <meta name="description" content={description}>
+    <meta name="robots" content={robots}>
+    <link rel="canonical" href={canonical}>
+    {pageKey !== null && (
+      <>
+        {LANGS.map(l => <link rel="alternate" hreflang={l} href={SITE.url + pagePath(l, pageKey)}>)}
+        <link rel="alternate" hreflang="x-default" href={SITE.url + pageKey}>
+      </>
+    )}
+    {markdownPath && <link rel="alternate" type="text/markdown" href={markdownPath} title={markdownLabel}>}
+    <link rel="describedby" type="text/markdown" href="/llms.txt" title="llms.txt">
+    <link rel="sitemap" type="application/xml" href="/sitemap-index.xml">
+
+    <meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <link rel="manifest" href="/site.webmanifest">
+
+    <Font cssVariable="--font-parmigiano" preload />
+    <ClientRouter />
+    <slot name="head" />
+    <script>
+    import '../scripts/site.ts';
+    </script>
+
+    <meta property="og:type" content={ogType}>
+    <meta property="og:site_name" content={SITE.name}>
+    <meta property="og:locale" content={LOCALES[lang].locale}>
+    <meta property="og:locale:alternate" content={LOCALES[otherLang(lang)].locale}>
+    <meta property="og:url" content={canonical}>
+    <meta property="og:title" content={ogTitle}>
+    <meta property="og:description" content={description}>
+    <meta property="og:image" content={ogImageUrl}>
+    <meta property="og:image:type" content="image/png">
+    <meta property="og:image:width" content={String(OG_WIDTH)}>
+    <meta property="og:image:height" content={String(OG_HEIGHT)}>
+    <meta property="og:image:alt" content={ogImageAlt}>
+    {modified && <meta property="article:modified_time" content={modified}>}
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content={ogTitle}>
+    <meta name="twitter:description" content={description}>
+    <meta name="twitter:image" content={ogImageUrl}>
+    <meta name="twitter:image:alt" content={ogImageAlt}>
+    {graph && <script type="application/ld+json" set:html={jsonLd(graph)} />}
+  </head>
+  <body class={bodyClass}>
+    <slot />
+  </body>
+</html>

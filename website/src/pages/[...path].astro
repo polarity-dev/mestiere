@@ -1,0 +1,53 @@
+---
+import type { GetStaticPaths } from "astro"
+import Chrome from "../components/Chrome.astro"
+import DocPage from "../components/DocPage.astro"
+import HomePage from "../components/HomePage.astro"
+import { UI } from "../i18n/ui.ts"
+import Document from "../layouts/Document.astro"
+import { extractFaq, htmlToText, renderMarkdown } from "../lib/markdown.ts"
+import { getPages, ogImageAlt, type Page } from "../lib/pages.ts"
+import { docGraph, homeGraph } from "../lib/structured-data.ts"
+
+export const getStaticPaths = (async() => {
+  const byLang = await getPages()
+  return Object.values(byLang).flatMap(pages =>
+    pages.map(page => ({
+      params: { path: page.path.slice(1, -1) || undefined },
+      props: { page, pages },
+    })))
+}) satisfies GetStaticPaths
+
+interface Props {
+  page: Page
+  pages: Page[]
+}
+
+const { page, pages } = Astro.props
+const isHome = page.key === "/"
+const faq = isHome
+  ? await Promise.all(extractFaq(page.body).map(async item => ({ ...item, html: await renderMarkdown(item.answer, page.lang) })))
+  : []
+const faqText = faq.map(item => ({ question: item.question, text: htmlToText(item.html) }))
+const title = /mestiere/i.test(page.seoTitle) ? page.seoTitle : `${page.seoTitle} · mestiere`;
+---
+<Document
+  lang={page.lang}
+  pageKey={page.key}
+  title={title}
+  ogTitle={page.seoTitle}
+  description={page.description}
+  canonical={page.url}
+  ogType={isHome ? "website" : "article"}
+  ogImage={page.ogImage}
+  ogImageAlt={ogImageAlt(page)}
+  modified={isHome ? undefined : page.modified}
+  markdownPath={`${page.path}index.md`}
+  markdownLabel={UI[page.lang].markdownVersion}
+  graph={isHome ? homeGraph(page, faqText) : docGraph(page)}
+  bodyClass={isHome ? "page-home" : "page-doc"}
+>
+  <Chrome lang={page.lang} pageKey={page.key}>
+    {isHome ? <HomePage lang={page.lang} faq={faq} /> : <DocPage page={page} pages={pages} />}
+  </Chrome>
+</Document>

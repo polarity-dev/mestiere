@@ -1,0 +1,68 @@
+---
+import { render } from "astro:content"
+import { UI } from "../i18n/ui.ts"
+import { docPages, type Page } from "../lib/pages.ts"
+import DocsList from "./DocsList.astro"
+
+interface Props {
+  page: Page
+  pages: Page[]
+}
+
+const { page, pages } = Astro.props
+const t = UI[page.lang]
+const { Content, headings } = await render(page.entry)
+const toc = headings.filter(h => h.depth === 2)
+const list = docPages(pages)
+const index = list.findIndex(p => p.key === page.key)
+const pager = [
+  { page: list[index - 1], rel: "prev", label: t.prev },
+  { page: list[index + 1], rel: "next", label: t.next },
+] as const;
+---
+<div class="container docs-layout">
+  <nav class="docs-nav" aria-label={t.docs}>
+    <p class="docs-nav-title">{t.docs}</p>
+    <DocsList pages={list} current={page} />
+  </nav>
+
+  <nav class="docs-menu" aria-label={t.docsMenu}>
+    <details>
+      <summary>
+        <span class="docs-menu-label">{t.docs}</span>
+        <span class="docs-menu-current">{page.navTitle}</span>
+      </summary>
+      <DocsList pages={list} current={page} />
+    </details>
+  </nav>
+
+  <article class="doc" id="main">
+    <header class="doc-header">
+      <h1>{page.title}</h1>
+      <p class="doc-lead">{page.description}</p>
+    </header>
+
+    {toc.length >= 2 && (
+      <nav class="toc" aria-label={t.toc}>
+        <p class="toc-title">{t.toc}</p>
+        <ul>
+          {toc.map(h => <li><a href={`#${h.slug}`}>{h.text}</a></li>)}
+        </ul>
+      </nav>
+    )}
+
+    <div class="doc-body">
+      <Content />
+    </div>
+
+    <nav class="pager" aria-label={t.pagerNav}>
+      {pager.map(({ page: p, rel, label }) => p
+        ? <a class={`pager-${rel}`} href={p.path} rel={rel}><span>{label}</span>{p.navTitle}</a>
+        : <span></span>)}
+    </nav>
+
+    <p class="doc-meta">
+      {t.updated} <time datetime={page.modified}>{page.modified.slice(0, 10)}</time> · <a href={`${page.path}index.md`}>{t.markdownVersion}</a>
+    </p>
+  </article>
+</div>

@@ -1,0 +1,48 @@
+---
+import Chrome from "../components/Chrome.astro"
+import { NOT_FOUND, UI } from "../i18n/ui.ts"
+import Document from "../layouts/Document.astro"
+import { notFoundGraphic } from "../lib/graphics.ts"
+import { ogImagePath } from "../lib/pages.ts"
+import { LANGS, localizeHref, SITE } from "../lib/site.ts"
+
+const en = NOT_FOUND.en
+const titleOf = (seoTitle: string) => `${seoTitle} · mestiere`;
+---
+<Document
+  lang="en"
+  pageKey={null}
+  title={titleOf(en.seoTitle)}
+  ogTitle={en.seoTitle}
+  description={en.description}
+  canonical={`${SITE.url}/404.html`}
+  robots="noindex, follow"
+  ogType="article"
+  ogImage={ogImagePath("en", "/")}
+  ogImageAlt={`mestiere: ${UI.en.ogTagline}`}
+  bodyClass="page-404"
+>
+  <script is:inline slot="head" src="/scripts/not-found.js"></script>
+  {LANGS.map(lang => {
+    const s = NOT_FOUND[lang]
+    const suffix = lang === "en" ? "" : `-${lang}`
+    return (
+      <div class={`page-lang page-${lang}`} lang={lang === "en" ? undefined : lang} data-title={titleOf(s.seoTitle)}>
+        <Chrome lang={lang} pageKey={null} idSuffix={suffix}>
+          <div class="container not-found" id={`main${suffix}`}>
+            <div class="not-found-text">
+              <p class="eyebrow">{s.eyebrow}</p>
+              <h1>{s.title}</h1>
+              <p class="lead">{s.text}</p>
+              <p class="actions">
+                <a class="button" href={localizeHref("/docs/", lang)}>{s.docs}</a>
+                <a class="button button-primary" href={localizeHref("/", lang)}>{s.home}</a>
+              </p>
+            </div>
+            <div class="not-found-graphic" set:html={notFoundGraphic(s.graphic, suffix)} />
+          </div>
+        </Chrome>
+      </div>
+    )
+  })}
+</Document>

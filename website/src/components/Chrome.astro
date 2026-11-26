@@ -1,0 +1,83 @@
+---
+import logoBlack from "@brand/mestiere-wordmark-black.svg?url"
+import logoWhite from "@brand/mestiere-wordmark-white.svg?url"
+import { UI } from "../i18n/ui.ts"
+import { liveVersion } from "../lib/live-version.ts"
+import { LOCALES, localizeHref, otherLang, pagePath, SITE, type Lang } from "../lib/site.ts"
+import GithubIcon from "../assets/icons/github-mark.svg"
+
+interface Props {
+  lang: Lang
+  pageKey: string | null
+  idSuffix?: string
+}
+
+const { lang, pageKey, idSuffix = "" } = Astro.props
+const panelId = `nav-panel${idSuffix}`
+const t = UI[lang]
+const key = pageKey ?? ""
+const href = (path: string) => localizeHref(path, lang)
+
+const nav = [
+  { href: "/install/", label: t.nav.install, current: key === "/install/" },
+  { href: "/docs/", label: t.nav.docs, current: key.startsWith("/docs/") && key !== "/docs/commands/" },
+  { href: "/docs/commands/", label: t.nav.commands, current: key === "/docs/commands/" },
+]
+
+const footer = [
+  ["/install/", t.footer.install],
+  ["/docs/", t.footer.start],
+  ["/docs/commands/", t.footer.commands],
+  ["/docs/registries/", t.footer.registries],
+  [`${SITE.repo}/releases`, t.footer.releases],
+  ["/llms.txt", "llms.txt"],
+] as const
+
+const other = otherLang(lang)
+const switchHref = `${pagePath(other, pageKey ?? "/")}?lang=${other}`
+const version = liveVersion("v");
+---
+<a class="skip-link" href={`#main${idSuffix}`}>{t.skipLink}</a>
+
+<header class="site-header">
+  <div class="container header-inner">
+    <div class="brand-wrap">
+      <a class="brand" href={href("/")} aria-label={t.homeLabel}>
+        <picture>
+          <source media="(prefers-color-scheme: dark)" srcset={logoWhite}>
+          <img src={logoBlack} alt="mestiere" width="136" height="29">
+        </picture>
+      </a>
+      <span class="version-tag" set:html={version} />
+    </div>
+    <nav class="nav-wrap" aria-label={t.mainNav}>
+      <div class="nav-panel" id={panelId} popover>
+        <ul class="nav">
+          {nav.map(item => (
+            <li><a href={href(item.href)} aria-current={item.current ? "page" : undefined}>{item.label}</a></li>
+          ))}
+        </ul>
+        <a class="nav-github" href={SITE.repo}><GithubIcon class="icon-github" aria-hidden="true" focusable="false" /><span>GitHub</span></a>
+      </div>
+      <a class="lang-switch" href={switchHref} hreflang={other} lang={other} aria-label={UI[other].switchTo} data-astro-prefetch="false" data-astro-reload>{LOCALES[other].short}</a>
+      <button class="nav-toggle" type="button" popovertarget={panelId} aria-label={t.menu}>
+        <span class="nav-toggle-bars" aria-hidden="true"></span>
+      </button>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <slot />
+</main>
+
+<footer class="site-footer">
+  <div class="container footer-inner">
+    <nav aria-label={t.footerNav}>
+      <ul class="footer-links">
+        {footer.map(([path, label]) => <li><a href={href(path)}>{label}</a></li>)}
+      </ul>
+    </nav>
+    <p>mestiere <Fragment set:html={version} /> · {t.builtBy} <a href={SITE.org.url}>{SITE.org.name}</a> · © {new Date().getFullYear()}</p>
+  </div>
+</footer>
