@@ -2,7 +2,7 @@
 
 mestiere is a Go CLI that installs Agent Skills from git registries into projects. This repository is also a registry: `registry.yaml` and `skills/mestiere/` hold the skills that teach agents to use the CLI, and Homebrew installs them globally.
 
-Read [docs/architecture.md](docs/architecture.md) before changing anything in `internal/project`, `internal/registry` or `internal/fsx`. User-facing behavior is documented in [docs/guide.md](docs/guide.md) and [docs/registry.md](docs/registry.md).
+Read [docs/architecture.md](docs/architecture.md) before changing anything in `internal/project`, `internal/registry` or `internal/fsx`. User-facing behavior is documented on the website, in [website/src/content/](website/src/content/), in English and Italian.
 
 ## Commands
 
@@ -53,9 +53,9 @@ These are the product. Don't weaken them to make a change easier.
 
 `skills/mestiere/` is shipped to users, so treat it like code.
 
-- `internal/cli/bundled_test.go` lints the registry and checks that every `mestiere …` command and `--flag` mentioned in the skills exists. When you rename or remove a command or flag, update the skills in the same change.
+- `internal/cli/bundled_test.go` lints the registry and checks that every `mestiere …` command and `--flag` mentioned in the skills, the README and the website pages exists. When you rename or remove a command or flag, update them in the same change.
 - `references/concepts.md` in each skill is a symlink to `_shared/references/concepts.md`. Edit the shared file and keep the links.
-- When CLI behavior changes, update `docs/` and the matching `SKILL.md` too.
+- When CLI behavior changes, update both languages in `website/src/content/` and the matching `SKILL.md` too.
 
 ## Docs style
 

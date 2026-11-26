@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/mestiere-wordmark-white.svg">
-    <img src="docs/assets/mestiere-wordmark-black.svg" alt="mestiere" width="480">
+    <img src="docs/assets/mestiere-wordmark-black.svg" alt="mestiere" width="390">
   </picture>
 </p>
 
@@ -20,7 +20,7 @@
 
 ```sh
 mestiere init --agents claude,kiro
-mestiere registry add polarity git@github.com:polarity-dev/skills.git
+mestiere registry add polarity git@github.com:your-org/skills.git
 mestiere add frontend backend/db-migrations
 ```
 
@@ -40,7 +40,7 @@ brew install --cask polarity-dev/tap/mestiere
 The install also gives Claude Code and Kiro mestiere's own skills globally. If you installed another way, run `mestiere add -g mestiere` once. Then ask your agent, from any repository:
 
 ```text
-Set up mestiere for this repo with our registry git@github.com:polarity-dev/skills.git
+Set up mestiere for this repo with our registry git@github.com:your-org/skills.git
 ```
 
 The agent runs `mestiere init`, shows you what the registry offers, installs the skills that fit the codebase and commits `skills.yaml`. Later prompts work the same way: "Are any of our skills outdated? Update them and summarize what changed", or "I want to tweak frontend-forms for this repo, keep it as our own and commit it".
@@ -94,7 +94,7 @@ mestiere add -g mestiere    # give your agents mestiere's own skills
 
 ```sh
 mestiere init --agents claude,kiro        # creates skills.yaml and the .gitignore rule
-mestiere registry add polarity git@github.com:polarity-dev/skills.git
+mestiere registry add polarity git@github.com:your-org/skills.git
 mestiere add frontend                     # whole namespace
 mestiere add backend/db-migrations        # single skill
 git add skills.yaml .gitignore && git commit -m "Add team skills"
@@ -133,8 +133,8 @@ Skills are installed once in `.agents/skills/`, the shared location that Codex, 
 
 ## Documentation
 
-- [Using mestiere in a project](docs/guide.md): `skills.yaml`, commands, updates, your own skills, CI, configuration
-- [Authoring a registry](docs/registry.md): layout, shared files, lint rules
+- [Getting started](https://mestiere.io/docs/), [command reference](https://mestiere.io/docs/commands/), [skills.yaml](https://mestiere.io/docs/skills-yaml/), [CI and configuration](https://mestiere.io/docs/ci/)
+- [Authoring a registry](https://mestiere.io/docs/registries/): layout, shared files, lint rules
 - [Architecture](docs/architecture.md): safety model, packages, design decisions
 - [Development](docs/development.md): tests and releases
 - [Brand assets](docs/brand.md)
